@@ -1,0 +1,40 @@
+# Environment — NEVER commit
+.env
+.env.local
+.env.*.local
+frontend/.env.local
+iv_engine/.env
+
+# Solana keypairs
+*.json
+!tsconfig.json
+!frontend/tsconfig.json
+
+# Rust / Anchor
+target/
+**/*.rs.bk
+
+# Node
+node_modules/
+frontend/node_modules/
+.next/
+frontend/.next/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+iv_engine/__pycache__/
+iv_engine/*.egg-info/
+iv_engine/.venv/
+iv_engine/venv/
+
+# Logs
+*.log
+iv_engine/logs/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+.DS_Store
