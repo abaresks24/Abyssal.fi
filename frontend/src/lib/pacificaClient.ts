@@ -90,13 +90,18 @@ export async function fetchKlines(
   return (json.data as KlineItem[]).map(klineToCandle);
 }
 
-/** Fetch real-time mark price + 24h stats for a symbol from /api/v1/info */
-export async function fetchPrices(): Promise<PriceItem[]> {
-  const res = await fetch('/api/pacifica/v1/info', { cache: 'no-store' });
-  if (!res.ok) return [];
-  const json = await res.json();
-  // info doesn't have prices — convert funding rates at least
-  return [];
+/** Fetch current price + 24h change for one symbol via klines (REST fallback) */
+export async function fetchLatestPrice(
+  symbol: string,
+): Promise<{ price: number; change24h: number }> {
+  const [recent, daily] = await Promise.all([
+    fetchKlines(symbol, '1m', 1),
+    fetchKlines(symbol, '1d', 2),
+  ]);
+  const price    = recent[recent.length - 1]?.close ?? 0;
+  const prevClose = daily.length >= 2 ? daily[daily.length - 2].close : (daily[0]?.open ?? 0);
+  const change24h = prevClose > 0 ? ((price - prevClose) / prevClose) * 100 : 0;
+  return { price, change24h };
 }
 
 // ── WebSocket client ──────────────────────────────────────────────────────────
