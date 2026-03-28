@@ -24,6 +24,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "decimal.js": "^10.4.3",
+    "lightweight-charts": "^4.2.3",
     "lucide-react": "^0.378.0",
     "next": "14.2.3",
     "react": "^18.3.1",

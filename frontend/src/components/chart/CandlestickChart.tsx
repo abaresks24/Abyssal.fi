@@ -1,386 +1,36 @@
 'use client';
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import type { Candle } from '@/types';
+import { sma, ema, bollingerBands, rsi, macd, toLWCSeries } from '@/lib/indicators';
 
-// ── Layout ─────────────────────────────────────────────────────────────────
-const PX_W   = 76;    // price axis width (right)
-const TX_H   = 24;    // time axis height (bottom)
-const VOL_R  = 0.14;  // volume panel fraction of chart height
-const OHLC_Y = 10;    // top-left OHLC text baseline Y
+// ── Theme ──────────────────────────────────────────────────────────────────
+const T = {
+  bg:        '#0a121c',
+  grid:      'rgba(255,255,255,0.04)',
+  axis:      '#526a82',
+  border:    'rgba(255,255,255,0.07)',
+  crosshair: 'rgba(120,145,170,0.6)',
+  xhairBg:   '#1e3048',
+  up:        '#02c77b',
+  down:      '#eb365a',
+  cyan:      '#55c3e9',
+  amber:     '#ecca5a',
+};
 
-const MIN_VIS = 8;
-const MAX_VIS = 500;
-const DEF_VIS = 80;
+// ── Indicator definitions ──────────────────────────────────────────────────
+const IND_DEFS = [
+  { id: 'ma7',   label: 'MA 7',   color: '#f0b90b' },
+  { id: 'ma25',  label: 'MA 25',  color: '#e91e63' },
+  { id: 'ma99',  label: 'MA 99',  color: '#2196f3' },
+  { id: 'ema12', label: 'EMA 12', color: '#9c27b0' },
+  { id: 'ema26', label: 'EMA 26', color: '#ff9800' },
+  { id: 'bb',    label: 'BB 20',  color: '#55c3e9' },
+  { id: 'vol',   label: 'Vol',    color: '#526a82' },
+  { id: 'rsi',   label: 'RSI 14', color: '#55c3e9' },
+  { id: 'macd',  label: 'MACD',   color: '#02c77b' },
+] as const;
 
-// ── Colors ─────────────────────────────────────────────────────────────────
-const C_UP    = '#02c77b';
-const C_DOWN  = '#eb365a';
-const C_CYAN  = '#55c3e9';
-const C_AMBER = '#ecca5a';
-const C_GRID  = 'rgba(255,255,255,0.04)';
-const C_LBL   = '#526a82';
-const C_XHAIR = 'rgba(120,145,170,0.6)';
-const C_BG    = '#0a121c';
-
-// ── Formatters ─────────────────────────────────────────────────────────────
-function fmtPrice(v: number): string {
-  if (v >= 10000) return v.toLocaleString('en-US', { maximumFractionDigits: 0 });
-  if (v >= 1000)  return v.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  if (v >= 1)     return v.toFixed(2);
-  return v.toFixed(4);
-}
-
-function fmtTime(ts: number, ms: number): string {
-  const d = new Date(ts);
-  if (ms < 3_600_000)  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-  if (ms < 86_400_000) return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}h`;
-  const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
-  return `${d.getDate()} ${mo}`;
-}
-
-// ── Nice round grid levels ─────────────────────────────────────────────────
-function niceGrid(lo: number, hi: number): number[] {
-  const span = hi - lo;
-  if (span <= 0) return [];
-  const rough = span / 6;
-  const mag   = Math.pow(10, Math.floor(Math.log10(rough)));
-  const step  = [1, 2, 2.5, 5, 10].map(f => f * mag).find(s => span / s <= 8) ?? rough;
-  const first = Math.ceil(lo / step) * step;
-  const out: number[] = [];
-  let v = first;
-  while (v < hi && out.length < 12) {
-    if (v > lo) out.push(parseFloat(v.toPrecision(10)));
-    v = parseFloat((v + step).toPrecision(12));
-  }
-  return out;
-}
-
-// ── Rounded rect helper (safe across browsers) ─────────────────────────────
-function rRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-}
-
-// ── View state ─────────────────────────────────────────────────────────────
-interface View { visibleCount: number; offset: number; yScale: number; }
-
-// ── Computed layout metrics (shared between both draw passes) ───────────────
-interface Metrics {
-  W: number; H: number;       // CSS dimensions
-  cW: number; cH: number;     // chart area (W - PX_W, H - TX_H)
-  pH: number; vH: number;     // price panel, volume panel heights
-  pHi: number; pLo: number; pSpan: number;
-  toY: (p: number) => number;
-  toVH: (v: number) => number;
-  cw: number; bw: number;     // candle width, body width
-  vis: Candle[];
-}
-
-function computeMetrics(candles: Candle[], view: View, W: number, H: number): Metrics | null {
-  if (!candles.length) return null;
-  const cW  = W - PX_W;
-  const cH  = H - TX_H;
-  const vH  = cH * VOL_R;
-  const pH  = cH - vH;
-  const end = Math.max(0, candles.length - view.offset);
-  const st  = Math.max(0, end - view.visibleCount);
-  const vis = candles.slice(st, end);
-  if (!vis.length) return null;
-
-  const rawHi = Math.max(...vis.map(c => c.high));
-  const rawLo = Math.min(...vis.map(c => c.low));
-  const mid   = (rawHi + rawLo) / 2;
-  const half  = ((rawHi - rawLo) / 2 || mid * 0.01) * view.yScale * 1.05;
-  const pHi   = mid + half;
-  const pLo   = mid - half;
-  const pSpan = pHi - pLo || 1;
-  const vMax  = Math.max(...vis.map(c => c.volume)) || 1;
-  const cw    = cW / vis.length;
-  const bw    = Math.max(1, cw * 0.6);
-
-  return {
-    W, H, cW, cH, pH, vH, pHi, pLo, pSpan,
-    toY:  (p) => ((pHi - p) / pSpan) * pH,
-    toVH: (v) => (v / vMax) * vH * 0.85,
-    cw, bw, vis,
-  };
-}
-
-// ── Draw static layer ──────────────────────────────────────────────────────
-function drawStatic(
-  canvas: HTMLCanvasElement,
-  candles: Candle[],
-  currentPrice: number,
-  selectedStrike: number | null,
-  view: View,
-  intervalMs: number,
-  dpr: number,
-) {
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-
-  const W = canvas.width / dpr;
-  const H = canvas.height / dpr;
-  const m = computeMetrics(candles, view, W, H);
-
-  ctx.save();
-  ctx.scale(dpr, dpr);
-  ctx.clearRect(0, 0, W, H);
-
-  if (!m) { ctx.restore(); return; }
-  const { cW, cH, pH, vH, pHi, pLo, pSpan, toY, toVH, cw, bw, vis } = m;
-
-  // ── Price axis separator ──
-  ctx.strokeStyle = 'rgba(255,255,255,0.07)';
-  ctx.lineWidth   = 1;
-  ctx.beginPath(); ctx.moveTo(cW, 0); ctx.lineTo(cW, cH); ctx.stroke();
-
-  // ── Grid + Y-axis labels ──
-  const levels = niceGrid(pLo, pHi);
-  ctx.font      = `10px 'IBM Plex Mono', monospace`;
-  ctx.textAlign = 'right';
-  levels.forEach(lv => {
-    const y = toY(lv);
-    if (y < 2 || y > pH - 2) return;
-    // Grid line
-    ctx.strokeStyle = C_GRID;
-    ctx.lineWidth   = 1;
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(cW, y); ctx.stroke();
-    // Label
-    ctx.fillStyle = C_LBL;
-    ctx.fillText(fmtPrice(lv), W - 5, y + 3.5);
-  });
-
-  // ── Volume divider ──
-  ctx.strokeStyle = C_GRID;
-  ctx.lineWidth   = 1;
-  ctx.setLineDash([2, 4]);
-  ctx.beginPath(); ctx.moveTo(0, pH); ctx.lineTo(cW, pH); ctx.stroke();
-  ctx.setLineDash([]);
-
-  // ── Candles + volume ──
-  vis.forEach((c, i) => {
-    const cx  = i * cw + cw / 2;
-    const up  = c.close >= c.open;
-    const col = up ? C_UP : C_DOWN;
-
-    const bTop = toY(Math.max(c.open, c.close));
-    const bBot = toY(Math.min(c.open, c.close));
-    const bH   = Math.max(1, bBot - bTop);
-    const wickW = Math.max(1, Math.min(1.5, cw * 0.12));
-
-    // Wick
-    ctx.strokeStyle = col;
-    ctx.lineWidth   = wickW;
-    ctx.beginPath(); ctx.moveTo(cx, toY(c.high)); ctx.lineTo(cx, toY(c.low)); ctx.stroke();
-
-    // Body
-    ctx.fillStyle = col;
-    if (bH <= 1) {
-      ctx.fillRect(cx - bw / 2, bTop, bw, 1);
-    } else {
-      ctx.fillRect(cx - bw / 2, bTop, bw, bH);
-    }
-
-    // Volume bar
-    const vh = toVH(c.volume);
-    ctx.fillStyle = up ? 'rgba(2,199,123,0.22)' : 'rgba(235,54,90,0.22)';
-    ctx.fillRect(cx - bw / 2, cH - vh, bw, vh);
-  });
-
-  // ── Time axis labels ──
-  ctx.fillStyle = C_LBL;
-  ctx.font      = `10px 'IBM Plex Mono', monospace`;
-  ctx.textAlign = 'center';
-  const maxTL   = Math.max(2, Math.floor(cW / 72));
-  const step    = Math.max(1, Math.ceil(vis.length / maxTL));
-  for (let i = 0; i < vis.length; i += step) {
-    const x = i * cw + cw / 2;
-    if (x < 10 || x > cW - 10) continue;
-    ctx.fillText(fmtTime(vis[i].timestamp, intervalMs), x, H - 7);
-  }
-
-  // ── Current price line + pill ──
-  if (currentPrice > 0) {
-    const y = toY(currentPrice);
-    if (y >= 0 && y <= pH) {
-      ctx.strokeStyle = C_CYAN;
-      ctx.lineWidth   = 1;
-      ctx.setLineDash([3, 3]);
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(cW, y); ctx.stroke();
-      ctx.setLineDash([]);
-
-      const label = fmtPrice(currentPrice);
-      const pillH = 17;
-      const pillW = PX_W - 4;
-      ctx.fillStyle = C_CYAN;
-      rRect(ctx, cW + 2, y - pillH / 2, pillW, pillH, 3);
-      ctx.fill();
-      ctx.fillStyle   = C_BG;
-      ctx.font        = `bold 10px 'IBM Plex Mono', monospace`;
-      ctx.textAlign   = 'center';
-      ctx.fillText(label, cW + 2 + pillW / 2, y + 4);
-    }
-  }
-
-  // ── Strike line + pill ──
-  if (selectedStrike && selectedStrike > 0) {
-    const y = toY(selectedStrike);
-    if (y >= 0 && y <= pH) {
-      ctx.strokeStyle = `${C_AMBER}aa`;
-      ctx.lineWidth   = 1;
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(cW, y); ctx.stroke();
-      ctx.setLineDash([]);
-
-      ctx.fillStyle = `${C_AMBER}cc`;
-      ctx.font      = `9px 'IBM Plex Mono', monospace`;
-      ctx.textAlign = 'left';
-      ctx.fillText(`K ${fmtPrice(selectedStrike)}`, 5, y - 4);
-
-      const pillH = 16;
-      const pillW = PX_W - 4;
-      ctx.fillStyle = 'rgba(236,202,90,0.15)';
-      rRect(ctx, cW + 2, y - pillH / 2, pillW, pillH, 3);
-      ctx.fill();
-      ctx.strokeStyle = `${C_AMBER}88`;
-      ctx.lineWidth   = 0.5;
-      rRect(ctx, cW + 2, y - pillH / 2, pillW, pillH, 3);
-      ctx.stroke();
-      ctx.fillStyle = `${C_AMBER}ee`;
-      ctx.font      = `9px 'IBM Plex Mono', monospace`;
-      ctx.textAlign = 'center';
-      ctx.fillText(fmtPrice(selectedStrike), cW + 2 + pillW / 2, y + 3.5);
-    }
-  }
-
-  ctx.restore();
-}
-
-// ── Draw crosshair + OHLC overlay ─────────────────────────────────────────
-function drawCrosshair(
-  canvas: HTMLCanvasElement,
-  mx: number, my: number,
-  candles: Candle[],
-  view: View,
-  intervalMs: number,
-  dpr: number,
-) {
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-
-  const W = canvas.width / dpr;
-  const H = canvas.height / dpr;
-  const m = computeMetrics(candles, view, W, H);
-
-  ctx.save();
-  ctx.scale(dpr, dpr);
-  ctx.clearRect(0, 0, W, H);
-
-  if (!m || mx < 0) { ctx.restore(); return; }
-  const { cW, cH, pH, pHi, pLo, pSpan, toY, cw, vis } = m;
-
-  const inChart = mx >= 0 && mx <= cW && my >= 0 && my <= cH;
-  if (!inChart) { ctx.restore(); return; }
-
-  // ── Crosshair lines ──
-  ctx.strokeStyle = C_XHAIR;
-  ctx.lineWidth   = 1;
-  ctx.setLineDash([3, 3]);
-  ctx.beginPath(); ctx.moveTo(mx, 0); ctx.lineTo(mx, cH); ctx.stroke();
-  if (my <= pH) {
-    ctx.beginPath(); ctx.moveTo(0, my); ctx.lineTo(cW, my); ctx.stroke();
-  }
-  ctx.setLineDash([]);
-
-  // ── Y-axis cursor price label ──
-  if (my >= 0 && my <= pH) {
-    const cursorPrice = pHi - (my / pH) * pSpan;
-    const label  = fmtPrice(cursorPrice);
-    const pillH  = 17;
-    const pillW  = PX_W - 4;
-    ctx.fillStyle = '#1e3048';
-    rRect(ctx, cW + 2, my - pillH / 2, pillW, pillH, 3);
-    ctx.fill();
-    ctx.strokeStyle = C_XHAIR;
-    ctx.lineWidth   = 0.5;
-    rRect(ctx, cW + 2, my - pillH / 2, pillW, pillH, 3);
-    ctx.stroke();
-    ctx.fillStyle   = '#c0d4e8';
-    ctx.font        = `10px 'IBM Plex Mono', monospace`;
-    ctx.textAlign   = 'center';
-    ctx.fillText(label, cW + 2 + pillW / 2, my + 4);
-  }
-
-  // ── X-axis cursor time label ──
-  const cidx = Math.min(Math.floor(mx / cw), vis.length - 1);
-  const hCandle = cidx >= 0 ? vis[cidx] : null;
-  if (hCandle) {
-    const label = fmtTime(hCandle.timestamp, intervalMs);
-    ctx.font = `10px 'IBM Plex Mono', monospace`;
-    const tw  = ctx.measureText(label).width;
-    const pillH = 17;
-    const pillW = tw + 14;
-    const px  = cidx * cw + cw / 2;
-    const lx  = Math.max(2, Math.min(cW - pillW - 2, px - pillW / 2));
-
-    ctx.fillStyle = '#1e3048';
-    rRect(ctx, lx, H - TX_H + 1, pillW, pillH, 3);
-    ctx.fill();
-    ctx.strokeStyle = C_XHAIR;
-    ctx.lineWidth   = 0.5;
-    rRect(ctx, lx, H - TX_H + 1, pillW, pillH, 3);
-    ctx.stroke();
-    ctx.fillStyle = '#c0d4e8';
-    ctx.textAlign = 'center';
-    ctx.fillText(label, lx + pillW / 2, H - TX_H + 12);
-  }
-
-  // ── OHLC display (top-left of chart area, like Pacifica) ──
-  if (hCandle) {
-    const c    = hCandle;
-    const up   = c.close >= c.open;
-    const chg  = ((c.close - c.open) / c.open) * 100;
-    const chgS = `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%`;
-    const col  = up ? C_UP : C_DOWN;
-
-    ctx.font = `10px 'IBM Plex Mono', monospace`;
-
-    const items: [string, string, string][] = [
-      ['O', fmtPrice(c.open),  '#c0d4e8'],
-      ['H', fmtPrice(c.high),  C_UP],
-      ['L', fmtPrice(c.low),   C_DOWN],
-      ['C', fmtPrice(c.close), '#c0d4e8'],
-    ];
-
-    let ox = 6;
-    const oy = OHLC_Y + 12;
-
-    items.forEach(([key, val, valCol]) => {
-      ctx.fillStyle = C_LBL;
-      ctx.textAlign = 'left';
-      ctx.fillText(key, ox, oy);
-      ox += ctx.measureText(key).width + 2;
-      ctx.fillStyle = valCol;
-      ctx.fillText(val, ox, oy);
-      ox += ctx.measureText(val).width + 10;
-    });
-
-    ctx.fillStyle = col;
-    ctx.fillText(chgS, ox, oy);
-  }
-
-  ctx.restore();
-}
+type IndicatorId = (typeof IND_DEFS)[number]['id'];
 
 // ── Props ──────────────────────────────────────────────────────────────────
 interface Props {
@@ -388,168 +38,317 @@ interface Props {
   currentPrice:   number;
   selectedStrike: number | null;
   intervalMs:     number;
+  onLoadMore?:    () => void;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
-export function CandlestickChart({ candles, currentPrice, selectedStrike, intervalMs }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const staticRef    = useRef<HTMLCanvasElement>(null);
-  const crossRef     = useRef<HTMLCanvasElement>(null);
+export function CandlestickChart({ candles, currentPrice, selectedStrike, onLoadMore }: Props) {
+  const mainRef  = useRef<HTMLDivElement>(null);
+  const rsiRef   = useRef<HTMLDivElement>(null);
+  const macdRef  = useRef<HTMLDivElement>(null);
 
-  const viewRef     = useRef<View>({ visibleCount: DEF_VIS, offset: 0, yScale: 1 });
-  const dragRef     = useRef<{ startX: number; startOffset: number } | null>(null);
-  const mouseRef    = useRef({ x: -1, y: -1 });
-  const rafRef      = useRef(0);
-  const candlesRef  = useRef(candles);
-  const intervalRef = useRef(intervalMs);
-  const [isDragging, setIsDragging] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const charts   = useRef<{ main?: any; rsi?: any; macd?: any }>({});
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const series   = useRef<Record<string, any>>({});
 
-  // Keep refs current so stable callbacks can access latest values
-  useEffect(() => { candlesRef.current  = candles;    }, [candles]);
-  useEffect(() => { intervalRef.current = intervalMs; }, [intervalMs]);
+  const [active, setActive] = useState<Set<IndicatorId>>(new Set(['vol']));
+  const loadMoreCooldown = useRef(false);
 
-  const getDPR  = () => window.devicePixelRatio || 1;
-  const getSize = useCallback(() => {
-    const el = containerRef.current;
-    return { W: el?.clientWidth ?? 800, H: el?.clientHeight ?? 400 };
+  const toggleIndicator = useCallback((id: IndicatorId) => {
+    setActive(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   }, []);
 
-  const sizeCanvas = useCallback((c: HTMLCanvasElement, W: number, H: number, dpr: number) => {
-    if (c.width !== Math.round(W * dpr) || c.height !== Math.round(H * dpr)) {
-      c.width  = Math.round(W * dpr);
-      c.height = Math.round(H * dpr);
-      c.style.width  = `${W}px`;
-      c.style.height = `${H}px`;
+  const showRSI  = active.has('rsi');
+  const showMACD = active.has('macd');
+
+  // ── Init / destroy charts ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!mainRef.current) return;
+    let destroyed = false;
+
+    (async () => {
+      const {
+        createChart, CrosshairMode, LineStyle,
+      } = await import('lightweight-charts');
+      if (destroyed) return;
+
+      const baseOpts = {
+        layout:  { background: { color: T.bg }, textColor: T.axis, fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 },
+        grid:    { vertLines: { color: T.grid }, horzLines: { color: T.grid } },
+        crosshair: {
+          mode: CrosshairMode.Normal,
+          vertLine: { color: T.crosshair, width: 1 as 1, style: LineStyle.Dashed, labelBackgroundColor: T.xhairBg },
+          horzLine: { color: T.crosshair, width: 1 as 1, style: LineStyle.Dashed, labelBackgroundColor: T.xhairBg },
+        },
+        rightPriceScale: { borderColor: T.border },
+        timeScale: { borderColor: T.border, timeVisible: true, secondsVisible: false },
+        handleScroll:   { mouseWheel: true, pressedMouseMove: true },
+        handleScale:    { mouseWheel: true, pinch: true },
+      };
+
+      // ── Main chart ──
+      const main = createChart(mainRef.current!, { ...baseOpts, width: mainRef.current!.clientWidth, height: mainRef.current!.clientHeight });
+      charts.current.main = main;
+
+      // Candlesticks
+      series.current.candle = main.addCandlestickSeries({
+        upColor: T.up, downColor: T.down,
+        borderUpColor: T.up, borderDownColor: T.down,
+        wickUpColor: T.up, wickDownColor: T.down,
+      });
+
+      // Volume (overlay, separate scale)
+      series.current.vol = main.addHistogramSeries({
+        priceFormat:  { type: 'volume' },
+        priceScaleId: 'vol',
+      });
+      main.priceScale('vol').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+
+      // Load-more on scroll to left edge
+      main.timeScale().subscribeVisibleLogicalRangeChange((range: { from: number; to: number } | null) => {
+        if (!range || loadMoreCooldown.current) return;
+        if (range.from < 5 && onLoadMore) {
+          loadMoreCooldown.current = true;
+          onLoadMore();
+          setTimeout(() => { loadMoreCooldown.current = false; }, 2000);
+        }
+      });
+
+      // ── RSI chart ──
+      if (rsiRef.current) {
+        const rsiChart = createChart(rsiRef.current, {
+          ...baseOpts,
+          width: rsiRef.current.clientWidth,
+          height: rsiRef.current.clientHeight,
+          crosshair: { ...baseOpts.crosshair, horzLine: { ...baseOpts.crosshair.horzLine, labelVisible: true } },
+          rightPriceScale: { ...baseOpts.rightPriceScale, scaleMargins: { top: 0.1, bottom: 0.1 } },
+          timeScale: { ...baseOpts.timeScale, visible: false },
+        });
+        charts.current.rsi = rsiChart;
+        series.current.rsiLine = rsiChart.addLineSeries({ color: T.cyan, lineWidth: 1 as 1 });
+        // RSI overbought/oversold bands
+        series.current.rsi70 = rsiChart.addLineSeries({ color: 'rgba(235,54,90,0.4)', lineWidth: 1 as 1, lineStyle: LineStyle.Dashed });
+        series.current.rsi30 = rsiChart.addLineSeries({ color: 'rgba(2,199,123,0.4)', lineWidth: 1 as 1, lineStyle: LineStyle.Dashed });
+
+        // Sync time scale
+        main.timeScale().subscribeVisibleTimeRangeChange((range) => {
+          if (range) rsiChart.timeScale().setVisibleRange(range);
+        });
+        rsiChart.timeScale().subscribeVisibleTimeRangeChange((range) => {
+          if (range) main.timeScale().setVisibleRange(range);
+        });
+      }
+
+      // ── MACD chart ──
+      if (macdRef.current) {
+        const macdChart = createChart(macdRef.current, {
+          ...baseOpts,
+          width: macdRef.current.clientWidth,
+          height: macdRef.current.clientHeight,
+          timeScale: { ...baseOpts.timeScale, visible: true },
+          rightPriceScale: { ...baseOpts.rightPriceScale, scaleMargins: { top: 0.1, bottom: 0.1 } },
+        });
+        charts.current.macd = macdChart;
+        series.current.macdLine   = macdChart.addLineSeries({ color: T.cyan,  lineWidth: 1 as 1 });
+        series.current.macdSig    = macdChart.addLineSeries({ color: '#ff9800', lineWidth: 1 as 1 });
+        series.current.macdHist   = macdChart.addHistogramSeries({ color: T.up });
+
+        main.timeScale().subscribeVisibleTimeRangeChange((range) => {
+          if (range) macdChart.timeScale().setVisibleRange(range);
+        });
+        macdChart.timeScale().subscribeVisibleTimeRangeChange((range) => {
+          if (range) main.timeScale().setVisibleRange(range);
+        });
+      }
+
+      // ── Resize observer ──
+      const ro = new ResizeObserver(() => {
+        if (mainRef.current)  main.applyOptions({ width: mainRef.current.clientWidth, height: mainRef.current.clientHeight });
+        if (rsiRef.current && charts.current.rsi)   charts.current.rsi.applyOptions({ width: rsiRef.current.clientWidth, height: rsiRef.current.clientHeight });
+        if (macdRef.current && charts.current.macd) charts.current.macd.applyOptions({ width: macdRef.current.clientWidth, height: macdRef.current.clientHeight });
+      });
+      if (mainRef.current)  ro.observe(mainRef.current);
+      if (rsiRef.current)   ro.observe(rsiRef.current);
+      if (macdRef.current)  ro.observe(macdRef.current);
+
+      return () => {
+        ro.disconnect();
+        main.remove();
+        charts.current.rsi?.remove();
+        charts.current.macd?.remove();
+        charts.current = {};
+        series.current = {};
+      };
+    })().then(cleanup => {
+      if (destroyed && cleanup) cleanup();
+    });
+
+    return () => { destroyed = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showRSI, showMACD]); // reinit when pane visibility changes
+
+  // ── Feed candle data ──────────────────────────────────────────────────
+  useEffect(() => {
+    const s = series.current;
+    if (!s.candle || candles.length === 0) return;
+
+    const closes = candles.map(c => c.close);
+
+    // Candles
+    s.candle.setData(candles.map(c => ({
+      time:  Math.floor(c.timestamp / 1000) as unknown as number,
+      open:  c.open, high: c.high, low: c.low, close: c.close,
+    })));
+
+    // Volume
+    if (s.vol) {
+      s.vol.setData(candles.map(c => ({
+        time:  Math.floor(c.timestamp / 1000) as unknown as number,
+        value: c.volume,
+        color: c.close >= c.open ? 'rgba(2,199,123,0.35)' : 'rgba(235,54,90,0.35)',
+      })));
     }
-  }, []);
 
-  const redrawStatic = useCallback(() => {
-    const sc = staticRef.current;
-    if (!sc) return;
-    const dpr = getDPR();
-    const { W, H } = getSize();
-    sizeCanvas(sc, W, H, dpr);
-    drawStatic(sc, candlesRef.current, currentPrice, selectedStrike, viewRef.current, intervalRef.current, dpr);
-  }, [currentPrice, selectedStrike, getSize, sizeCanvas]);
+    // MA / EMA overlay series on main chart
+    const ma = (p: number) => toLWCSeries(candles, sma(closes, p));
+    const em = (p: number) => toLWCSeries(candles, ema(closes, p));
+    if (s.ma7)   s.ma7.setData(ma(7));
+    if (s.ma25)  s.ma25.setData(ma(25));
+    if (s.ma99)  s.ma99.setData(ma(99));
+    if (s.ema12) s.ema12.setData(em(12));
+    if (s.ema26) s.ema26.setData(em(26));
 
-  const redrawCross = useCallback(() => {
-    const cc = crossRef.current;
-    if (!cc) return;
-    const dpr = getDPR();
-    const { W, H } = getSize();
-    sizeCanvas(cc, W, H, dpr);
-    drawCrosshair(cc, mouseRef.current.x, mouseRef.current.y, candlesRef.current, viewRef.current, intervalRef.current, dpr);
-  }, [getSize, sizeCanvas]);
+    // BB
+    if (s.bbUpper || s.bbMid || s.bbLower) {
+      const bb = bollingerBands(closes);
+      if (s.bbUpper) s.bbUpper.setData(toLWCSeries(candles, bb.map(b => b.upper)));
+      if (s.bbMid)   s.bbMid.setData(toLWCSeries(candles, bb.map(b => b.mid)));
+      if (s.bbLower) s.bbLower.setData(toLWCSeries(candles, bb.map(b => b.lower)));
+    }
 
-  // Redraw on data/prop change
-  useEffect(() => { redrawStatic(); }, [redrawStatic]);
-  // Also redraw when candles update (ref won't trigger the above)
-  useEffect(() => { redrawStatic(); }, [candles, redrawStatic]);
+    // RSI
+    if (s.rsiLine) {
+      const rsiVals = rsi(closes);
+      s.rsiLine.setData(toLWCSeries(candles, rsiVals));
+      // Flat 70 / 30 lines
+      const flat = (v: number) => candles.map(c => ({ time: Math.floor(c.timestamp / 1000) as unknown as number, value: v }));
+      s.rsi70?.setData(flat(70));
+      s.rsi30?.setData(flat(30));
+    }
 
-  // ResizeObserver
+    // MACD
+    if (s.macdLine) {
+      const { macdLine, signalLine, hist } = macd(closes);
+      s.macdLine.setData(toLWCSeries(candles, macdLine));
+      s.macdSig.setData(toLWCSeries(candles, signalLine));
+      s.macdHist.setData(candles
+        .map((c, i) => ({ time: Math.floor(c.timestamp / 1000) as unknown as number, value: hist[i] ?? 0, color: (hist[i] ?? 0) >= 0 ? T.up : T.down }))
+        .filter(d => d.value !== 0));
+    }
+
+    // Current price line
+    if (currentPrice > 0) {
+      s.candle.createPriceLine?.({
+        price: currentPrice, color: T.cyan, lineWidth: 1,
+        lineStyle: 2, axisLabelVisible: true, title: '',
+      });
+    }
+
+    // Strike line
+    if (selectedStrike && selectedStrike > 0) {
+      s.candle.createPriceLine?.({
+        price: selectedStrike, color: T.amber, lineWidth: 1,
+        lineStyle: 2, axisLabelVisible: true, title: `K ${selectedStrike.toLocaleString()}`,
+      });
+    }
+  }, [candles, currentPrice, selectedStrike]);
+
+  // ── Add/remove overlay indicator series when toggled ───────────────────
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => { redrawStatic(); redrawCross(); });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [redrawStatic, redrawCross]);
+    const chart = charts.current.main;
+    if (!chart) return;
+    import('lightweight-charts').then(({ LineStyle }) => {
+      const addLine = (key: string, color: string) => {
+        if (!series.current[key]) {
+          series.current[key] = chart.addLineSeries({ color, lineWidth: 1 as 1, lineStyle: LineStyle.Solid, priceLineVisible: false, lastValueVisible: false });
+        }
+      };
+      const removeSeries = (key: string) => {
+        if (series.current[key]) {
+          try { chart.removeSeries(series.current[key]); } catch { /* ignore */ }
+          delete series.current[key];
+        }
+      };
 
-  // ── Wheel (non-passive so preventDefault works) ──
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const v = viewRef.current;
-      if (e.shiftKey) {
-        // Y zoom
-        const f = e.deltaY > 0 ? 1.12 : 0.89;
-        viewRef.current = { ...v, yScale: Math.max(0.3, Math.min(12, v.yScale * f)) };
+      if (active.has('ma7'))  { addLine('ma7',  '#f0b90b'); } else removeSeries('ma7');
+      if (active.has('ma25')) { addLine('ma25', '#e91e63'); } else removeSeries('ma25');
+      if (active.has('ma99')) { addLine('ma99', '#2196f3'); } else removeSeries('ma99');
+      if (active.has('ema12')){ addLine('ema12','#9c27b0'); } else removeSeries('ema12');
+      if (active.has('ema26')){ addLine('ema26','#ff9800'); } else removeSeries('ema26');
+
+      if (active.has('bb')) {
+        addLine('bbUpper', 'rgba(85,195,233,0.7)');
+        addLine('bbMid',   'rgba(85,195,233,0.4)');
+        addLine('bbLower', 'rgba(85,195,233,0.7)');
       } else {
-        // X zoom (candle count)
-        const f    = e.deltaY > 0 ? 1.12 : 0.89;
-        const next = Math.round(v.visibleCount * f);
-        viewRef.current = { ...v, visibleCount: Math.max(MIN_VIS, Math.min(MAX_VIS, next)) };
+        removeSeries('bbUpper'); removeSeries('bbMid'); removeSeries('bbLower');
       }
-      redrawStatic();
-      redrawCross();
-    };
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
-  }, [redrawStatic, redrawCross]);
-
-  // ── Global mousemove + mouseup (so drag continues outside the div) ──
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (!dragRef.current) return;
-      const v       = viewRef.current;
-      const { W }   = getSize();
-      const pxPer   = (W - PX_W) / v.visibleCount;
-      const delta   = Math.round(-(e.clientX - dragRef.current.startX) / pxPer);
-      const maxOff  = Math.max(0, candlesRef.current.length - v.visibleCount);
-      viewRef.current = { ...v, offset: Math.max(0, Math.min(maxOff, dragRef.current.startOffset + delta)) };
-      redrawStatic();
-
-      // Update crosshair position relative to container
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (rect) {
-        mouseRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-        cancelAnimationFrame(rafRef.current);
-        rafRef.current = requestAnimationFrame(redrawCross);
-      }
-    };
-
-    const onUp = () => {
-      dragRef.current = null;
-      setIsDragging(false);
-    };
-
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup',   onUp);
-    return () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup',   onUp);
-    };
-  }, [getSize, redrawStatic, redrawCross]);
-
-  // ── Mouse down: start drag ──
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    dragRef.current = { startX: e.clientX, startOffset: viewRef.current.offset };
-    setIsDragging(true);
-  }, []);
-
-  // ── Mouse move: crosshair only (pan handled globally above) ──
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (dragRef.current) return; // global handler covers this case
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    mouseRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-    cancelAnimationFrame(rafRef.current);
-    rafRef.current = requestAnimationFrame(redrawCross);
-  }, [redrawCross]);
-
-  const handleMouseLeave = useCallback(() => {
-    if (dragRef.current) return; // keep crosshair while dragging outside
-    mouseRef.current = { x: -1, y: -1 };
-    cancelAnimationFrame(rafRef.current);
-    rafRef.current = requestAnimationFrame(redrawCross);
-  }, [redrawCross]);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
 
   return (
-    <div
-      ref={containerRef}
-      style={{
-        width: '100%', height: '100%', position: 'relative',
-        cursor: isDragging ? 'grabbing' : 'crosshair',
-        overflow: 'hidden', userSelect: 'none',
-      }}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-    >
-      <canvas ref={staticRef} style={{ position: 'absolute', inset: 0 }} />
-      <canvas ref={crossRef}  style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: T.bg }}>
+
+      {/* ── Indicator toolbar ── */}
+      <div style={{
+        display: 'flex', gap: 4, padding: '4px 8px', flexShrink: 0,
+        borderBottom: `1px solid ${T.border}`, flexWrap: 'wrap',
+      }}>
+        {IND_DEFS.map(({ id, label, color }) => {
+          const on = active.has(id);
+          return (
+            <button
+              key={id}
+              onClick={() => toggleIndicator(id)}
+              style={{
+                padding: '2px 8px', fontSize: 10, borderRadius: 3, cursor: 'pointer',
+                fontFamily: "'IBM Plex Mono', monospace", letterSpacing: '0.04em',
+                background: on ? `${color}22` : 'transparent',
+                color:      on ? color : T.axis,
+                border:     `1px solid ${on ? color : 'rgba(255,255,255,0.1)'}`,
+                transition: 'all 0.1s',
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Main chart ── */}
+      <div ref={mainRef} style={{ flex: 1, minHeight: 0 }} />
+
+      {/* ── RSI pane ── */}
+      {showRSI && (
+        <div style={{ flexShrink: 0, height: 120, borderTop: `1px solid ${T.border}`, position: 'relative' }}>
+          <span style={{ position: 'absolute', top: 4, left: 8, fontSize: 9, color: T.cyan, fontFamily: "'IBM Plex Mono', monospace", zIndex: 1, pointerEvents: 'none' }}>RSI (14)</span>
+          <div ref={rsiRef} style={{ width: '100%', height: '100%' }} />
+        </div>
+      )}
+
+      {/* ── MACD pane ── */}
+      {showMACD && (
+        <div style={{ flexShrink: 0, height: 120, borderTop: `1px solid ${T.border}`, position: 'relative' }}>
+          <span style={{ position: 'absolute', top: 4, left: 8, fontSize: 9, color: T.cyan, fontFamily: "'IBM Plex Mono', monospace", zIndex: 1, pointerEvents: 'none' }}>MACD (12, 26, 9)</span>
+          <div ref={macdRef} style={{ width: '100%', height: '100%' }} />
+        </div>
+      )}
     </div>
   );
 }

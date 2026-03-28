@@ -20,7 +20,7 @@ function CenterPanel() {
   const [timeframe, setTimeframe] = useState<TfInterval>('1h');
   const intervalMs = TIMEFRAMES.find(t => t.interval === timeframe)?.ms ?? 3_600_000;
 
-  const { candles, isLoading } = useOHLCV(market, timeframe);
+  const { candles, isLoading, loadMore } = useOHLCV(market, timeframe);
   const { price: spot } = usePacificaWS(market);
   const { iv } = useAFVR(market);
 
@@ -52,6 +52,7 @@ function CenterPanel() {
             currentPrice={spot}
             selectedStrike={strike > 0 ? strike : null}
             intervalMs={intervalMs}
+            onLoadMore={loadMore}
           />
         )}
       </div>

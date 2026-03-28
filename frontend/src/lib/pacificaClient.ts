@@ -56,8 +56,8 @@ export async function fetchKlines(
   symbol: string,
   interval = '1h',
   limit = 200,
+  beforeMs?: number,       // if set, fetch candles ending before this timestamp
 ): Promise<Candle[]> {
-  const now   = Date.now();
   const msMap: Record<string, number> = {
     '1m': 60_000, '3m': 180_000, '5m': 300_000,
     '15m': 900_000, '30m': 1_800_000,
@@ -65,13 +65,14 @@ export async function fetchKlines(
     '8h': 28_800_000, '12h': 43_200_000, '1d': 86_400_000,
   };
   const periodMs = msMap[interval] ?? 3_600_000;
-  const startTime = now - limit * periodMs;
+  const endTime   = beforeMs ?? Date.now();
+  const startTime = endTime - limit * periodMs;
 
   const params = new URLSearchParams({
     symbol,
     interval,
     start_time: startTime.toString(),
-    end_time:   now.toString(),
+    end_time:   endTime.toString(),
     limit:      limit.toString(),
   });
 
