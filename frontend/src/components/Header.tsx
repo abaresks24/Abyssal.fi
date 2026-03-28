@@ -1,5 +1,6 @@
 'use client';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { AbyssalLogo } from './AbyssalLogo';
 
 export type AppTab = 'trade' | 'positions' | 'liquidity' | 'analytics';
 
@@ -22,10 +23,8 @@ export function Header({ activeTab, onTabChange, positionCount = 0 }: Props) {
       <div className="max-w-[1600px] mx-auto px-4 h-14 flex items-center justify-between gap-4">
 
         {/* Logo */}
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center">
-            <span className="text-white text-xs font-bold">A</span>
-          </div>
+        <div className="flex items-center gap-2.5 shrink-0">
+          <AbyssalLogo size={28} />
           <span className="text-base font-semibold text-white">
             Abyssal<span className="text-cyan-400">.fi</span>
           </span>

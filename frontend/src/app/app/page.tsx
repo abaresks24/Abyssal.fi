@@ -9,6 +9,7 @@ import { GreeksDashboard } from '@/components/GreeksDashboard';
 import { PositionsList } from '@/components/PositionsList';
 import { LiquidityPanel } from '@/components/LiquidityPanel';
 import { IVSurface } from '@/components/IVSurface';
+import { BreakevenChart } from '@/components/BreakevenChart';
 import { TradeModal } from '@/components/TradeModal';
 import { usePacificaPrice } from '@/hooks/usePacificaPrice';
 import { usePriceBySymbol } from '@/hooks/usePacificaPrice';
@@ -279,7 +280,7 @@ export default function HomePage() {
 
               <div className="space-y-5">
                 <div className="bg-[#0a0a0f] border border-[#1a1a2e] rounded-2xl p-5">
-                  <IVSurface market={form.market} spot={spot} atmIV={iv} rho={-0.1} phi={0.05} />
+                  <BreakevenChart form={form} spot={spot} premium={totalWithFee} />
                 </div>
                 <div className="bg-[#0a0a0f] border border-[#1a1a2e] rounded-2xl p-5">
                   <GreeksDashboard greeks={greeks} spotPrice={spot} iv={iv} />

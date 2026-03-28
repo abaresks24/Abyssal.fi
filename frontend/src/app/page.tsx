@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { AbyssalLogo } from '@/components/AbyssalLogo';
 
 const FEATURES = [
   {
@@ -52,6 +53,7 @@ export default function LandingPage() {
       {/* ── Nav ────────────────────────────────────────────────────────────── */}
       <nav className="relative z-10 flex items-center justify-between px-8 py-6">
         <div className="flex items-center gap-2.5">
+          <AbyssalLogo size={32} />
           <span className="text-xl font-bold tracking-tight text-white">
             Abyssal<span className="text-cyan-400">.fi</span>
           </span>
@@ -175,7 +177,10 @@ export default function LandingPage() {
 
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
       <footer className="relative z-10 bg-[#050508] border-t border-white/5 px-8 py-6 flex items-center justify-between text-xs text-white/30">
-        <span>Abyssal<span className="text-cyan-500/60">.fi</span> — On-chain options on Solana</span>
+        <span className="inline-flex items-center gap-2">
+          <AbyssalLogo size={16} />
+          Abyssal<span className="text-cyan-500/60">.fi</span> — On-chain options on Solana
+        </span>
         <span>Devnet · CBkvR8…W1hG</span>
       </footer>
     </div>
