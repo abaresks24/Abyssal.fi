@@ -31,7 +31,8 @@ import {
   BPS_DENOM,
 } from './constants';
 import { MARKET_DISCRIMINANTS, OPTION_TYPE_DISCRIMINANTS } from '@/types';
-import type { Market, OptionType, Position, PositionStatus } from '@/types';
+import type { Market, OptionType, OptionPositionAccount, PositionStatus } from '@/types';
+type Position = OptionPositionAccount;
 
 const PROGRAM_PUBKEY   = new PublicKey(PROGRAM_ID);
 const USDC_MINT_PUBKEY = new PublicKey(USDC_MINT);

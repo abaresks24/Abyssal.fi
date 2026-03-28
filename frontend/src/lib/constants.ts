@@ -1,38 +1,72 @@
-export const PROGRAM_ID = process.env.NEXT_PUBLIC_PROGRAM_ID || 'CBkvR8SeN6j8RQKB7dSxG3dza2v71XHmWEe8LgfMW1hG';
-// Authority that initialized the vault (set via NEXT_PUBLIC_VAULT_AUTHORITY env var)
-export const VAULT_AUTHORITY = process.env.NEXT_PUBLIC_VAULT_AUTHORITY || '';
-export const USDC_MINT = process.env.NEXT_PUBLIC_USDC_MINT || '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
-export const SOLANA_RPC = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
-// Calls go through the Next.js proxy (/api/pacifica/*) to keep the API key server-side
-export const PACIFICA_API_URL = '/api/pacifica';
-export const PACIFICA_WS_URL = process.env.NEXT_PUBLIC_PACIFICA_WS_URL || 'wss://ws.pacifica.finance';
+import { PublicKey } from '@solana/web3.js';
+import type { Market, Expiry } from '@/types';
 
-export const SCALE = 1_000_000;
-export const PLATFORM_FEE_BPS = 5;      // 0.05%
-export const SETTLEMENT_FEE_BPS = 5;    // 0.05% ITM, capped at 50 USDC
-export const SETTLEMENT_FEE_CAP = 50;   // USD
+// ── Program / network ─────────────────────────────────────────────────────────
+
+export const PROGRAM_ID = new PublicKey('CBkvR8SeN6j8RQKB7dSxG3dza2v71XHmWEe8LgfMW1hG');
+export const USDC_MINT  = new PublicKey('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU');
+export const SOLANA_RPC = process.env.NEXT_PUBLIC_SOLANA_RPC ?? 'https://api.devnet.solana.com';
+export const VAULT_AUTHORITY = '5YpmYnxuCbaTLAQLqaug9F8XBwG9XM5SFq5fhpoBdtgD';
+
+// ── Fees ──────────────────────────────────────────────────────────────────────
+
+export const PLATFORM_FEE_BPS = 5;
 export const BPS_DENOM = 10_000;
+export const SCALE = 1_000_000;
 
-export const CRYPTO_MARKETS = ['BTC', 'ETH', 'SOL'] as const;
-export const EQUITY_MARKETS = ['NVDA', 'TSLA', 'PLTR', 'CRCL', 'HOOD', 'SP500'] as const;
-export const COMMODITY_MARKETS = ['XAU', 'XAG', 'PAXG', 'PLATINUM', 'NATGAS', 'COPPER'] as const;
-export const MARKETS = [...CRYPTO_MARKETS, ...EQUITY_MARKETS, ...COMMODITY_MARKETS] as const;
+// ── Markets ───────────────────────────────────────────────────────────────────
 
-export const EXPIRY_OPTIONS = [
-  { label: '1D',  days: 1 },
-  { label: '7D',  days: 7 },
-  { label: '14D', days: 14 },
-  { label: '30D', days: 30 },
-  { label: '60D', days: 60 },
-  { label: '90D', days: 90 },
-];
+export const MARKETS: Market[] = ['BTC', 'ETH', 'SOL'];
 
-export const STRIKE_GRID_PCT = [70, 75, 80, 85, 90, 95, 100, 105, 110, 115, 120, 125, 130];
+export const MARKET_LABELS: Partial<Record<Market, string>> = {
+  BTC: 'Bitcoin',
+  ETH: 'Ethereum',
+  SOL: 'Solana',
+};
 
-export const DEFAULT_SLIPPAGE_BPS = 100; // 1%
+export const MARKET_DECIMALS: Partial<Record<Market, number>> = {
+  BTC: 0,
+  ETH: 0,
+  SOL: 2,
+};
 
-export const MAX_EXPIRY_DAYS = 90;
-export const MIN_EXPIRY_HOURS = 1;
+// ── Strikes ───────────────────────────────────────────────────────────────────
 
-export const SECONDS_PER_YEAR = 365.25 * 24 * 3600;
-export const SECONDS_PER_DAY = 86400;
+/** Offsets from spot. 6 strikes around ATM. */
+export const STRIKE_OFFSETS = [-0.10, -0.05, 0, +0.05, +0.10, +0.20] as const;
+
+export function computeStrikes(spot: number): number[] {
+  return STRIKE_OFFSETS.map((o) => Math.round((spot * (1 + o)) / 100) * 100);
+}
+
+// ── Expiries ──────────────────────────────────────────────────────────────────
+
+export const EXPIRY_OPTIONS: Expiry[] = ['1D', '3D', '7D', '14D', '30D'];
+
+export const EXPIRY_TO_YEARS: Record<Expiry, number> = {
+  '1D':  1 / 365,
+  '3D':  3 / 365,
+  '7D':  7 / 365,
+  '14D': 14 / 365,
+  '30D': 30 / 365,
+};
+
+export function expiryToDate(expiry: Expiry): Date {
+  const days = parseInt(expiry, 10);
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  d.setHours(8, 0, 0, 0);
+  return d;
+}
+
+// ── Pacifica API endpoints ────────────────────────────────────────────────────
+
+export const PACIFICA_REST  = process.env.NEXT_PUBLIC_PACIFICA_REST_URL  ?? '';
+export const PACIFICA_WS    = process.env.NEXT_PUBLIC_PACIFICA_WS_URL    ?? '';
+export const PACIFICA_KEY   = process.env.NEXT_PUBLIC_PACIFICA_API_KEY   ?? '';
+
+// ── Market discriminants (on-chain) ───────────────────────────────────────────
+
+export const MARKET_DISC: Record<string, number> = {
+  BTC: 0, ETH: 1, SOL: 2,
+};

@@ -1,118 +1,135 @@
-import { PublicKey } from '@solana/web3.js';
-import BN from 'bn.js';
+// ── Core domain types ─────────────────────────────────────────────────────────
 
-// ── Enums ────────────────────────────────────────────────────────────────────
-
-// All supported markets — must match Rust Market enum discriminants exactly
-export type Market =
-  // Crypto (0–2)
-  | 'BTC' | 'ETH' | 'SOL'
-  // Equities (3–8)
+export type Market = 'BTC' | 'ETH' | 'SOL'
   | 'NVDA' | 'TSLA' | 'PLTR' | 'CRCL' | 'HOOD' | 'SP500'
-  // Commodities (9–14)
   | 'XAU' | 'XAG' | 'PAXG' | 'PLATINUM' | 'NATGAS' | 'COPPER';
 
 export type CryptoMarket = 'BTC' | 'ETH' | 'SOL';
-export type OptionType = 'Call' | 'Put';
-export type PositionStatus = 'open' | 'expired' | 'settled' | 'exercised';
 
-// ── On-chain State Types ─────────────────────────────────────────────────────
+export type Side = 'call' | 'put';
 
-export interface IVParams {
-  ivAtm: number;           // scaled 1e6
-  ivSkewRho: number;       // signed, scaled 1e6
-  ivCurvaturePhi: number;  // scaled 1e6
-  thetaParam: number;      // scaled 1e6
+export type Expiry = '1D' | '3D' | '7D' | '14D' | '30D';
+
+export const EXPIRY_TO_YEARS: Record<Expiry, number> = {
+  '1D':  1 / 365,
+  '3D':  3 / 365,
+  '7D':  7 / 365,
+  '14D': 14 / 365,
+  '30D': 30 / 365,
+};
+
+export const EXPIRY_LABELS: Expiry[] = ['1D', '3D', '7D', '14D', '30D'];
+
+// ── Price / Market data ───────────────────────────────────────────────────────
+
+export interface Candle {
+  timestamp: number;  // unix ms
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
 }
 
-export interface OptionVaultAccount {
-  bump: number;
-  authority: PublicKey;
-  keeper: PublicKey;
-  usdcMint: PublicKey;
-  usdcVault: PublicKey;
-  totalCollateral: BN;
-  openInterest: BN;
-  deltaNet: BN;
-  ivParams: IVParams;
-  lastIvUpdate: BN;
-  feesCollected: BN;
-  paused: boolean;
+export interface MarketStats {
+  market: string;
+  markPrice: number;
+  indexPrice: number;
+  change24h: number;
+  changePct24h: number;
+  high24h: number;
+  low24h: number;
+  volume24h: number;
+  openInterest: number;
+  fundingRate: number;
 }
 
-export interface OptionPositionAccount {
-  bump: number;
-  owner: PublicKey;
-  vault: PublicKey;
-  market: Market;
-  optionType: OptionType;
-  strike: BN;
-  expiry: BN;
-  size: BN;
-  premiumPaid: BN;
-  entryIv: BN;
-  entryDelta: BN;
-  settled: boolean;
-  payoffReceived: BN;
-  createdAt: BN;
+export interface FundingRate {
+  rate: number;
+  timestamp: number;
 }
 
-export interface AmmPoolAccount {
-  bump: number;
-  vault: PublicKey;
-  market: Market;
-  optionType: OptionType;
-  strike: BN;
-  expiry: BN;
-  reserveOptions: BN;
-  reserveUsdc: BN;
-  kInvariantLo: BN;
-  kInvariantHi: BN;
-  totalLpTokens: BN;
-  feesEarned: BN;
-  lastRebalance: BN;
+export interface PriceFeed {
+  market: string;
+  price: number;
+  bid: number;
+  ask: number;
+  change24h: number;
+  volume24h: number;
+  timestamp: number;
 }
 
-export interface LPPositionAccount {
-  bump: number;
-  owner: PublicKey;
-  pool: PublicKey;
-  lpTokens: BN;
-  usdcDeposited: BN;
-  createdAt: BN;
-}
+// ── Options ───────────────────────────────────────────────────────────────────
 
-// ── UI / Display Types ───────────────────────────────────────────────────────
+export interface Greeks {
+  delta: number;
+  gamma: number;
+  theta: number;  // per day in USDC × size
+  vega: number;   // per 1% vol move in USDC × size
+}
 
 export interface OptionSeries {
   market: Market;
-  optionType: OptionType;
-  strike: number;        // USDC price (human-readable)
-  expiry: Date;
-  daysToExpiry: number;
-  poolKey?: string;
-}
-
-export interface PriceQuote {
-  series: OptionSeries;
-  unitPremium: number;   // per 1 underlying unit, USDC
-  totalPremium: number;  // for desired size, USDC
-  fee: number;           // platform fee, USDC
-  iv: number;            // implied vol decimal
-  greeks: Greeks;
-  poolSpotPrice?: number;
-  slippage?: number;
-}
-
-export interface Greeks {
-  delta: number;    // ∂V/∂S
-  gamma: number;    // ∂²V/∂S²
-  theta: number;    // per day, USDC
-  vega: number;     // per 1% vol, USDC
-  rho?: number;
+  side: Side;
+  strike: number;
+  expiry: Expiry;
+  premium: number;   // BS price per unit in USDC
+  iv: number;        // AFVR implied vol (decimal, e.g. 0.64)
+  delta: number;
+  gamma: number;
+  theta: number;
+  vega: number;
 }
 
 export interface Position {
+  id: string;
+  market: Market;
+  side: Side;
+  strike: number;
+  expiry: Expiry;
+  size: number;
+  premiumPaid: number;
+  entryIV: number;
+  openedAt: number;
+  pnl: number;
+}
+
+// ── Option Builder state ──────────────────────────────────────────────────────
+
+export interface OptionBuilderState {
+  market: Market;
+  side: Side;
+  strike: number;
+  expiry: Expiry;
+  size: number;
+}
+
+// ── Legacy compat (keep anchor_client happy) ──────────────────────────────────
+
+export type OptionType = 'Call' | 'Put';
+export type PositionStatus = 'open' | 'closed' | 'exercised' | 'expired' | 'settled';
+
+export const MARKET_DISCRIMINANTS: Record<string, number> = {
+  BTC: 0, ETH: 1, SOL: 2,
+  NVDA: 3, TSLA: 4, PLTR: 5, CRCL: 6, HOOD: 7, SP500: 8,
+  XAU: 9, XAG: 10, PAXG: 11, PLATINUM: 12, NATGAS: 13, COPPER: 14,
+};
+
+export const OPTION_TYPE_DISCRIMINANTS: Record<string, number> = {
+  Call: 0, Put: 1,
+};
+
+export interface TradeFormState {
+  market: string;
+  optionType: OptionType;
+  strike: number;
+  expiry: Date;
+  size: number;
+  slippageBps: number;
+}
+
+/** On-chain position account as returned by anchor_client */
+export interface OptionPositionAccount {
   pubkey: string;
   owner: string;
   market: Market;
@@ -126,108 +143,11 @@ export interface Position {
   settled: boolean;
   payoffReceived: number;
   createdAt: Date;
-  // Computed fields
-  currentPremium?: number;
-  pnl?: number;
-  greeks?: Greeks;
   status: PositionStatus;
-  isItm?: boolean;
 }
-
-export interface LPPosition {
-  pubkey: string;
-  pool: string;
-  market: Market;
-  optionType: OptionType;
-  strike: number;
-  expiry: Date;
-  lpTokens: number;
-  usdcDeposited: number;
-  currentValue?: number;
-  pnl?: number;
-  sharePercent?: number;
-}
-
-// ── IV Surface ────────────────────────────────────────────────────────────────
 
 export interface IVSurfacePoint {
-  maturityDays: number;
-  strikePct: number;
-  iv: number;
-  callPrice?: number;
-  putPrice?: number;
-  delta?: number;
-  vega?: number;
-}
-
-export interface IVSurface {
-  market: Market;
-  spot: number;
-  timestamp: number;
-  params: {
-    ivAtm: number;
-    ivSkewRho: number;
-    ivCurvaturePhi: number;
-    thetaParam: number;
-    realizedVol: number;
-  };
-  surface: IVSurfacePoint[];
-}
-
-// ── Trade Form ────────────────────────────────────────────────────────────────
-
-export interface TradeFormState {
-  market: Market;
-  optionType: OptionType;
   strike: number;
-  expiry: Date;
-  size: number;
-  slippageBps: number;
-  action: 'buy' | 'sell';
+  expiry: number;
+  iv: number;
 }
-
-// ── Notifications ─────────────────────────────────────────────────────────────
-
-export type NotificationType = 'success' | 'error' | 'warning' | 'info';
-
-export interface Notification {
-  id: string;
-  type: NotificationType;
-  title: string;
-  message: string;
-  txSig?: string;
-  timestamp: Date;
-}
-
-// ── Price feed ────────────────────────────────────────────────────────────────
-
-export interface PriceFeed {
-  market: string;   // any Pacifica symbol (BTC, ETH, NVDA, XAU, ...)
-  price: number;
-  bid: number;
-  ask: number;
-  change24h: number;
-  volume24h: number;
-  timestamp: number;
-}
-
-// ── Constants ─────────────────────────────────────────────────────────────────
-
-export const SCALE = 1_000_000;
-export const PLATFORM_FEE_BPS = 5;
-export const SETTLEMENT_FEE_BPS = 5;
-export const SETTLEMENT_FEE_CAP_USDC = 50;
-
-export const MARKET_DISCRIMINANTS: Record<Market, number> = {
-  // Crypto
-  BTC: 0, ETH: 1, SOL: 2,
-  // Equities
-  NVDA: 3, TSLA: 4, PLTR: 5, CRCL: 6, HOOD: 7, SP500: 8,
-  // Commodities
-  XAU: 9, XAG: 10, PAXG: 11, PLATINUM: 12, NATGAS: 13, COPPER: 14,
-};
-
-export const OPTION_TYPE_DISCRIMINANTS: Record<OptionType, number> = {
-  Call: 0,
-  Put: 1,
-};

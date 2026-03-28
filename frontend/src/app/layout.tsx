@@ -1,38 +1,31 @@
 import type { Metadata } from 'next';
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import { IBM_Plex_Sans, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
 import { WalletContextProvider } from '@/components/WalletProvider';
 
-const inter = Inter({
+const ibmPlexSans = IBM_Plex_Sans({
   subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
-  variable: '--font-inter',
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-sans',
   display: 'swap',
 });
 
-const mono = JetBrains_Mono({
+const ibmPlexMono = IBM_Plex_Mono({
   subsets: ['latin'],
-  weight: ['400', '500'],
+  weight: ['300', '400', '500'],
   variable: '--font-mono',
   display: 'swap',
 });
 
 export const metadata: Metadata = {
-  title: 'Abyssal.fi | On-Chain Options',
-  description:
-    'Decentralized options market on Solana — IV derived from on-chain data, 0.05% fees.',
-  keywords: ['DeFi', 'options', 'Solana', 'derivatives', 'AMM'],
-  openGraph: {
-    title: 'Abyssal.fi',
-    description: 'On-chain European options on Solana',
-    type: 'website',
-  },
+  title: 'Abyssal.fi — Decentralized Options on Solana',
+  description: 'Trade European options on BTC, ETH and SOL perps. Cash-settled in USDC.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`dark ${inter.variable} ${mono.variable}`}>
-      <body className="bg-background text-foreground antialiased min-h-screen">
+    <html lang="en" className={`${ibmPlexSans.variable} ${ibmPlexMono.variable}`}>
+      <body>
         <WalletContextProvider>{children}</WalletContextProvider>
       </body>
     </html>
