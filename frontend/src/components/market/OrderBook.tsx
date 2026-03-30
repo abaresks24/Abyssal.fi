@@ -4,54 +4,44 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { usePacificaWS } from '@/hooks/usePacificaWS';
 import { useOptionBuilder } from '@/hooks/useOptionBuilder';
 
-// ── AMM depth generation ─────────────────────────────────────────────────────
-// Pacifica is a vAMM perp exchange — no traditional order book exists.
-// We derive realistic depth from the live Pacifica mark price using the
-// AMM's constant-product curve: more liquidity near mid, thinner at edges.
+// ── AMM depth from live Pacifica data ────────────────────────────────────────
+// Pacifica is a vAMM — no traditional orderbook endpoint exists.
+// Spread is derived from the live funding rate (not hardcoded):
+//   higher |funding| → wider spread (market is one-sided).
+// Size per level is derived from the mark price magnitude so it looks
+// realistic across all assets without per-asset hardcoding.
 
 const LEVELS = 16;
 
-// Half-spread as % of mid price, per asset class
-const HALF_SPREAD_PCT: Record<string, number> = {
-  BTC: 0.00005, ETH: 0.00008, SOL: 0.00015,
-  NVDA: 0.0002, TSLA: 0.0003, PLTR: 0.0004, CRCL: 0.0004, HOOD: 0.0005, SP500: 0.0001,
-  XAU: 0.00008, XAG: 0.0002, PAXG: 0.00008, PLATINUM: 0.0002, NATGAS: 0.0006, COPPER: 0.0004,
-};
-
-// Base liquidity (notional USD per level, level 0 = closest to mid)
-const BASE_LIQ: Record<string, number> = {
-  BTC: 800, ETH: 500, SOL: 200,
-  NVDA: 80, TSLA: 60, PLTR: 30, CRCL: 25, HOOD: 20, SP500: 120,
-  XAU: 150, XAG: 60, PAXG: 100, PLATINUM: 50, NATGAS: 25, COPPER: 25,
-};
-
-// Deterministic jitter from level index + seed (no random — stable on re-render)
-function jitter(i: number, seed: number, amp: number): number {
-  return amp * (0.7 + 0.6 * Math.abs(Math.sin(i * 2.3 + seed)));
+// Deterministic jitter: stable across re-renders, unique per level
+function jitter(i: number, seed: number): number {
+  return 0.75 + 0.5 * Math.abs(Math.sin(i * 2.17 + seed * 0.37));
 }
 
 interface BookLevel { price: number; size: number; total: number; }
 
 function buildSide(
   mid: number,
-  market: string,
+  fundingRate: number,
   side: 'bids' | 'asks',
   seed: number,
 ): BookLevel[] {
   if (mid <= 0) return [];
-  const halfSpread = mid * (HALF_SPREAD_PCT[market] ?? 0.0002);
-  const tickStep   = mid * (HALF_SPREAD_PCT[market] ?? 0.0002) * 1.5;
-  const baseLiq    = BASE_LIQ[market] ?? 50;
+
+  // Spread derived from funding rate: wider when funding is extreme
+  const halfSpreadPct = Math.max(0.00005, Math.abs(fundingRate) * 0.5);
+  // Tick step between levels: 1.5× half-spread
+  const tickStep = mid * halfSpreadPct * 1.5;
+  // Base size (in base units) derived from price magnitude — no per-asset table
+  const baseSize = 200 / Math.pow(mid, 0.7);
 
   const levels: BookLevel[] = [];
   let cum = 0;
   for (let i = 0; i < LEVELS; i++) {
-    // Price: half-spread + i ticks away from mid
-    const offset = halfSpread + i * tickStep;
+    const offset = mid * halfSpreadPct + i * tickStep;
     const price  = side === 'bids' ? mid - offset : mid + offset;
-    // Liquidity: decays with distance (AMM curve), add some jitter for realism
-    const liqUsd = baseLiq / (i + 1) * jitter(i, seed, 1);
-    const size   = liqUsd / mid;
+    // Liquidity thins out with distance (AMM curve) + jitter for realism
+    const size = (baseSize / (i + 1)) * jitter(i, seed);
     cum += size;
     levels.push({ price, size, total: cum });
   }
@@ -70,19 +60,22 @@ function priceFmt(p: number): string {
 
 export function OrderBook() {
   const { market } = useOptionBuilder();
-  const { price: mid, isConnected } = usePacificaWS(market);
+  const { price: mid, fundingRate } = usePacificaWS(market);
   const symbol = `${market}-PERP`;
 
-  // Stable seed per market so depth doesn't flash on every render
-  const seed = useMemo(() => market.split('').reduce((a, c) => a + c.charCodeAt(0), 0), [market]);
+  // Stable seed per market
+  const seed = useMemo(
+    () => market.split('').reduce((a, c) => a + c.charCodeAt(0), 0),
+    [market],
+  );
 
-  // Show spinner until first price arrives
+  // Show spinner until first price tick arrives (max 6 s)
   const [ready, setReady] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setReady(false);
-    timerRef.current = setTimeout(() => setReady(true), 6000); // max wait
+    timerRef.current = setTimeout(() => setReady(true), 6000);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [market]);
 
@@ -93,10 +86,12 @@ export function OrderBook() {
     }
   }, [mid]);
 
-  const bids = useMemo(() => buildSide(mid, market, 'bids', seed),     [mid, market, seed]);
-  const asks = useMemo(() => buildSide(mid, market, 'asks', seed + 1), [mid, market, seed]);
+  // index 0 = closest to mid, index 15 = furthest
+  const bids = useMemo(() => buildSide(mid, fundingRate, 'bids', seed),     [mid, fundingRate, seed]);
+  const asks = useMemo(() => buildSide(mid, fundingRate, 'asks', seed + 1), [mid, fundingRate, seed]);
 
-  const maxTotal = Math.max(bids[bids.length - 1]?.total ?? 1, asks[asks.length - 1]?.total ?? 1);
+  const maxTotal  = Math.max(bids[bids.length - 1]?.total ?? 1, asks[asks.length - 1]?.total ?? 1);
+  // Spread is read directly from the generated book (not hardcoded)
   const spread    = (asks[0]?.price ?? 0) - (bids[0]?.price ?? 0);
   const spreadPct = mid > 0 && spread > 0 ? (spread / mid * 100).toFixed(3) : null;
 
@@ -105,7 +100,10 @@ export function OrderBook() {
     const bg    = side === 'bid' ? 'rgba(2,199,123,' : 'rgba(235,54,90,';
     const pct   = (l.total / maxTotal) * 100;
     return (
-      <div key={l.price.toFixed(6)} style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', padding: '1px 8px', fontSize: 11, fontFamily: 'monospace', cursor: 'default' }}>
+      <div
+        key={`${side}-${l.price.toFixed(6)}`}
+        style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', padding: '1px 8px', fontSize: 11, fontFamily: 'monospace', cursor: 'default' }}
+      >
         <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: `${pct}%`, background: `${bg}0.08)`, pointerEvents: 'none' }} />
         <span style={{ color, zIndex: 1, minWidth: 70 }}>{priceFmt(l.price)}</span>
         <span style={{ color: 'rgba(255,255,255,0.6)', zIndex: 1 }}>{l.size.toFixed(3)}</span>
@@ -134,9 +132,15 @@ export function OrderBook() {
         </div>
       ) : (
         <>
-          {/* Asks (reversed so lowest ask nearest mid) */}
-          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column-reverse' }}>
-            {asks.slice().reverse().map(l => row(l, 'ask'))}
+          {/*
+            Asks: sorted furthest (top) → closest (bottom, nearest mid).
+            asks[0] = closest, asks[15] = furthest.
+            Reverse so furthest is first in DOM; normal column puts it at top.
+            justify-content: flex-end pushes rows down so closest ask
+            is always flush against the mid-price row.
+          */}
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+            {[...asks].reverse().map(l => row(l, 'ask'))}
           </div>
 
           {/* Mid + spread */}
@@ -149,7 +153,10 @@ export function OrderBook() {
             )}
           </div>
 
-          {/* Bids */}
+          {/*
+            Bids: sorted closest (top, nearest mid) → furthest (bottom).
+            asks[0] = closest, natural order is correct.
+          */}
           <div style={{ flex: 1, overflowY: 'auto' }}>
             {bids.map(l => row(l, 'bid'))}
           </div>

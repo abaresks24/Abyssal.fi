@@ -40,7 +40,7 @@ interface TVWidgetHandle {
 // Unsub callbacks keyed by TV subscriber UID (module-level, survives re-renders)
 const barUnsubMap = new Map<string, () => void>();
 
-// ─── Fallback: our own lightweight-charts component ──────────────────────────
+// ─── Fallback: TradingView lightweight-charts ────────────────────────────────
 
 function FallbackChart() {
   const { market, strike } = useOptionBuilder();
@@ -51,7 +51,7 @@ function FallbackChart() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Header + timeframe */}
+      {/* Header + timeframe selector (no custom toolbar) */}
       <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         <div style={{ flex: 1 }}>
           <ChartHeader market={market} />
@@ -60,7 +60,7 @@ function FallbackChart() {
           <TimeframeSelector current={timeframe} onChange={setTimeframe} />
         </div>
       </div>
-      {/* Chart */}
+      {/* Chart — lightweight-charts handles all interactions natively */}
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         {isLoading ? (
           <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
