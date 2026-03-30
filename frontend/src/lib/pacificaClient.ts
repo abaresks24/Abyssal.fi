@@ -110,6 +110,19 @@ export async function fetchLatestPrice(
 type PricesCallback = (items: PriceItem[]) => void;
 type CandleCallback = (candle: Candle) => void;
 
+export interface OrderBookLevel {
+  price: number;
+  size: number;
+}
+
+export interface OrderBookData {
+  bids: OrderBookLevel[];
+  asks: OrderBookLevel[];
+  timestamp?: number;
+}
+
+type OrderBookCallback = (data: OrderBookData) => void;
+
 interface Subscription {
   params: Record<string, string>;
   callbacks: Set<(...args: unknown[]) => void>;
@@ -199,6 +212,26 @@ class PacificaWSClient {
   // --- Subscribe to 'prices' channel ---
   subscribePrices(cb: PricesCallback): () => void {
     return this._subscribe({ source: 'prices' }, cb as (d: unknown) => void);
+  }
+
+  // --- Subscribe to order book ---
+  subscribeOrderBook(symbol: string, cb: OrderBookCallback): () => void {
+    const params = { source: 'orderbook', symbol };
+    const rawCb = (data: unknown) => {
+      // Pacifica may send [[price,size],...] arrays or {price,size} objects
+      if (!data || typeof data !== 'object') return;
+      const d = data as Record<string, unknown>;
+      const parse = (arr: unknown): OrderBookLevel[] => {
+        if (!Array.isArray(arr)) return [];
+        return arr.map((item) => {
+          if (Array.isArray(item)) return { price: Number(item[0]), size: Number(item[1]) };
+          const o = item as Record<string, unknown>;
+          return { price: Number(o.price ?? o.p ?? 0), size: Number(o.size ?? o.s ?? o.qty ?? 0) };
+        });
+      };
+      cb({ bids: parse(d.bids), asks: parse(d.asks), timestamp: Number(d.timestamp ?? d.ts ?? 0) });
+    };
+    return this._subscribe(params, rawCb as (d: unknown) => void);
   }
 
   // --- Subscribe to mark price candles ---

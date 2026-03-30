@@ -1,5 +1,5 @@
 'use client';
-import React, { useState } from 'react';
+import React from 'react';
 import { Nav } from './Nav';
 import { TickerBar } from './TickerBar';
 import { MarketSelector } from '@/components/market/MarketSelector';
@@ -7,56 +7,17 @@ import { IVPanel } from '@/components/market/IVPanel';
 import { KeeperStatus } from '@/components/market/KeeperStatus';
 import { OrderBook } from '@/components/market/OrderBook';
 import { TradeHistory } from '@/components/market/TradeHistory';
-import { ChartHeader } from '@/components/chart/ChartHeader';
-import { CandlestickChart } from '@/components/chart/CandlestickChart';
-import { TimeframeSelector, TIMEFRAMES } from '@/components/chart/TimeframeSelector';
-import type { TfInterval } from '@/components/chart/TimeframeSelector';
+import { TradingViewChart } from '@/components/chart/TradingViewChart';
 import { OptionBuilder } from '@/components/builder/OptionBuilder';
-import { OptionBuilderProvider, useOptionBuilder } from '@/hooks/useOptionBuilder';
-import { useOHLCV } from '@/hooks/useOHLCV';
-import { usePacificaWS } from '@/hooks/usePacificaWS';
-import { useAFVR } from '@/hooks/useAFVR';
+import { OptionBuilderProvider } from '@/hooks/useOptionBuilder';
 
 function CenterPanel() {
-  const { market, strike } = useOptionBuilder();
-  const [timeframe, setTimeframe] = useState<TfInterval>('1h');
-  const intervalMs = TIMEFRAMES.find(t => t.interval === timeframe)?.ms ?? 3_600_000;
-
-  const { candles, isLoading, loadMore } = useOHLCV(market, timeframe);
-  const { price: spot } = usePacificaWS(market);
-  const { iv } = useAFVR(market);
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
 
-      {/* Header row: asset info + timeframe selector */}
-      <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-        <div style={{ flex: 1 }}>
-          <ChartHeader market={market} />
-        </div>
-        <div style={{ borderLeft: '1px solid var(--border)', padding: '0 6px' }}>
-          <TimeframeSelector current={timeframe} onChange={setTimeframe} />
-        </div>
-      </div>
-
-      {/* Chart — flex: 1 */}
+      {/* Chart — fills all available space; TradingViewChart manages its own header */}
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
-        {isLoading ? (
-          <div style={{
-            height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--text3)', fontFamily: 'var(--mono)', fontSize: 12,
-          }}>
-            Connecting to Pacifica…
-          </div>
-        ) : (
-          <CandlestickChart
-            candles={candles}
-            currentPrice={spot}
-            selectedStrike={strike > 0 ? strike : null}
-            intervalMs={intervalMs}
-            onLoadMore={loadMore}
-          />
-        )}
+        <TradingViewChart />
       </div>
 
       {/* Option Builder — fixed 280px height below chart */}
