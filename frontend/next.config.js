@@ -33,13 +33,19 @@ const nextConfig = {
       path: require.resolve('path-browserify'),
     };
 
-    // ── Deduplicate viem ────────────────────────────────────────────────────
+    // ── Deduplicate viem + stub missing Privy peer deps ─────────────────────
     // Privy v3 + WalletConnect bring 14 nested viem installs, all with
     // incomplete ESM builds on Windows/WSL filesystems.
     // Aliasing 'viem' to the root install (2.47.6) fixes all of them at once.
+    // @farcaster/mini-app-solana and @solana-program/memo are optional peer
+    // deps pulled in by Privy internals that are not published to npm yet —
+    // stub them with an empty module so the build doesn't fail.
+    const emptyModule = path.resolve(__dirname, 'stubs/empty-module.js');
     config.resolve.alias = {
       ...config.resolve.alias,
       viem: path.resolve(__dirname, 'node_modules/viem'),
+      '@farcaster/mini-app-solana': emptyModule,
+      '@solana-program/memo':       emptyModule,
     };
 
     config.experiments = {
