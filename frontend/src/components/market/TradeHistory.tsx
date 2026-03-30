@@ -18,14 +18,8 @@ export function TradeHistory() {
         <span>Time</span><span>Wallet</span><span>Strike · Exp</span><span style={{ textAlign: 'right' }}>Prem</span>
       </div>
       {/* Empty state */}
-      <div style={{
-        flex: 1, display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center', gap: 6,
-      }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <span style={{ color: '#526a82', fontSize: 11 }}>No trades yet</span>
-        <span style={{ color: 'rgba(82,106,130,0.6)', fontSize: 10, textAlign: 'center', padding: '0 16px' }}>
-          Protocol not yet live
-        </span>
       </div>
     </div>
   );

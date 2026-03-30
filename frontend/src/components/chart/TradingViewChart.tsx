@@ -1,5 +1,6 @@
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useOptionBuilder } from '@/hooks/useOptionBuilder';
 import { CandlestickChart } from '@/components/chart/CandlestickChart';
 import { ChartHeader } from '@/components/chart/ChartHeader';
@@ -62,11 +63,9 @@ function FallbackChart() {
       {/* Chart */}
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         {isLoading ? (
-          <div style={{
-            height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--text3)', fontFamily: 'var(--mono)', fontSize: 12,
-          }}>
-            Connecting to Pacifica…
+          <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <LoadingSpinner size={36} />
+            <span style={{ color: 'var(--text3)', fontFamily: 'var(--mono)', fontSize: 12 }}>Connecting to Pacifica…</span>
           </div>
         ) : (
           <CandlestickChart
@@ -297,8 +296,9 @@ export function TradingViewChart() {
 
   if (libStatus === 'checking') {
     return (
-      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#526a82', fontSize: 12 }}>
-        Initializing chart…
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+        <LoadingSpinner size={36} />
+        <span style={{ color: '#526a82', fontSize: 12 }}>Initializing chart…</span>
       </div>
     );
   }

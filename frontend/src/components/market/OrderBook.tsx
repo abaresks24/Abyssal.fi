@@ -1,5 +1,6 @@
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { pacificaClient } from '@/lib/pacificaClient';
 import type { OrderBookData, OrderBookLevel } from '@/lib/pacificaClient';
 import { usePacificaWS } from '@/hooks/usePacificaWS';
@@ -85,8 +86,9 @@ export function OrderBook() {
       </div>
 
       {status === 'connecting' && (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#526a82', fontSize: 11 }}>
-          Connecting…
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+          <LoadingSpinner size={28} />
+          <span style={{ color: '#526a82', fontSize: 11 }}>Connecting…</span>
         </div>
       )}
 
