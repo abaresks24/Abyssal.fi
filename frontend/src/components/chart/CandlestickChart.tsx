@@ -33,9 +33,9 @@ const IND_DEFS = [
 type IndicatorId = (typeof IND_DEFS)[number]['id'];
 
 // ── Drawing tools ─────────────────────────────────────────────────────────────
-type DrawTool = 'cursor' | 'line' | 'hline' | 'vline' | 'rect' | 'text';
+type DrawTool = 'cursor' | 'line' | 'hline' | 'vline' | 'rect' | 'freehand' | 'measure' | 'polyline' | 'text';
 interface DrawPoint { price: number; time: number; }
-interface Drawing { id: string; tool: DrawTool; points: DrawPoint[]; color: string; }
+interface Drawing { id: string; tool: DrawTool; points: DrawPoint[]; color: string; text?: string; }
 
 // ── SVG toolbar icons ────────────────────────────────────────────────────────
 const Icons = {
@@ -113,10 +113,19 @@ export function CandlestickChart({ candles, currentPrice, selectedStrike, onLoad
   const [renderTick, setRenderTick] = useState(0);
   // Incremented after main chart is fully initialised — gates subsequent effects
   const [chartReady, setChartReady] = useState(0);
+  // Polyline: accumulates click-points until double-click
+  const [polylinePts, setPolylinePts] = useState<DrawPoint[]>([]);
+  // Text tool: pending position waiting for text input
+  const [textPending, setTextPending] = useState<{ px: number; py: number; pt: DrawPoint } | null>(null);
+  const [textValue,   setTextValue]   = useState('');
+  // Current cursor pixel position (for polyline preview)
+  const [hoverPx, setHoverPx] = useState<{ x: number; y: number } | null>(null);
 
-  const loadCooldown = useRef(false);
-  const isDrawing    = useRef(false);
-  const drawStart    = useRef<DrawPoint | null>(null);
+  const loadCooldown   = useRef(false);
+  const isDrawing      = useRef(false);
+  const drawStart      = useRef<DrawPoint | null>(null);
+  const freehandPts    = useRef<DrawPoint[]>([]);
+  const lastClickTime  = useRef(0);   // for double-click detection on polyline
 
   const showRSI  = active.has('rsi');
   const showMACD = active.has('macd');
@@ -625,97 +634,249 @@ export function CandlestickChart({ candles, currentPrice, selectedStrike, onLoad
 
   const onDrawDown = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     if (drawTool === 'cursor') return;
+    e.preventDefault();
     const pos = relPos(e); if (!pos) return;
-    const pt = fromPixel(pos.x, pos.y); if (!pt) return;
+    const pt  = fromPixel(pos.x, pos.y); if (!pt) return;
+
+    // ── Single-click instant tools ──
     if (drawTool === 'hline' || drawTool === 'vline') {
       setDrawings(prev => [...prev, { id: Date.now().toString(), tool: drawTool, points: [pt], color: T.cyan }]);
       return;
     }
-    isDrawing.current = true; drawStart.current = pt;
-    setDraftDraw({ id: 'draft', tool: drawTool, points: [pt, pt], color: T.cyan });
-  }, [drawTool, fromPixel, relPos]);
+
+    // ── Text: show input overlay ──
+    if (drawTool === 'text') {
+      setTextPending({ px: pos.x, py: pos.y, pt });
+      setTextValue('');
+      return;
+    }
+
+    // ── Polyline: accumulate clicks, double-click to close ──
+    if (drawTool === 'polyline') {
+      const now = Date.now();
+      const isDbl = now - lastClickTime.current < 350;
+      lastClickTime.current = now;
+      if (isDbl && polylinePts.length >= 2) {
+        // finalise
+        setDrawings(prev => [...prev, { id: Date.now().toString(), tool: 'polyline', points: polylinePts, color: T.cyan }]);
+        setPolylinePts([]);
+        return;
+      }
+      setPolylinePts(prev => [...prev, pt]);
+      return;
+    }
+
+    // ── Drag tools: line, rect, freehand, measure ──
+    isDrawing.current = true;
+    drawStart.current = pt;
+    if (drawTool === 'freehand') {
+      freehandPts.current = [pt];
+      setDraftDraw({ id: 'draft', tool: 'freehand', points: [pt], color: T.cyan });
+    } else {
+      setDraftDraw({ id: 'draft', tool: drawTool, points: [pt, pt], color: T.cyan });
+    }
+  }, [drawTool, fromPixel, relPos, polylinePts]);
 
   const onDrawMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
-    if (!isDrawing.current || !drawStart.current) return;
     const pos = relPos(e); if (!pos) return;
-    const pt = fromPixel(pos.x, pos.y); if (!pt) return;
-    setDraftDraw(prev => prev ? { ...prev, points: [drawStart.current!, pt] } : null);
-  }, [fromPixel, relPos]);
+    const pt  = fromPixel(pos.x, pos.y); if (!pt) return;
+    setHoverPx({ x: pos.x, y: pos.y });
+
+    if (!isDrawing.current && drawTool !== 'polyline') return;
+
+    if (drawTool === 'freehand' && isDrawing.current) {
+      freehandPts.current = [...freehandPts.current, pt];
+      setDraftDraw({ id: 'draft', tool: 'freehand', points: freehandPts.current, color: T.cyan });
+      return;
+    }
+
+    if (isDrawing.current && drawStart.current) {
+      setDraftDraw(prev => prev ? { ...prev, points: [drawStart.current!, pt] } : null);
+    }
+  }, [drawTool, fromPixel, relPos]);
 
   const onDrawUp = useCallback(() => {
     if (!isDrawing.current || !draftDraw) return;
-    isDrawing.current = false; drawStart.current = null;
-    if (draftDraw.points.length >= 2) setDrawings(prev => [...prev, { ...draftDraw, id: Date.now().toString() }]);
+    isDrawing.current = false;
+    drawStart.current = null;
+    if (drawTool === 'freehand') {
+      if (freehandPts.current.length > 1) {
+        setDrawings(prev => [...prev, { ...draftDraw, id: Date.now().toString(), points: freehandPts.current }]);
+      }
+      freehandPts.current = [];
+    } else if (draftDraw.points.length >= 2) {
+      setDrawings(prev => [...prev, { ...draftDraw, id: Date.now().toString() }]);
+    }
     setDraftDraw(null);
-  }, [draftDraw]);
+  }, [draftDraw, drawTool]);
+
+  // Cancel polyline / text on Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setPolylinePts([]);
+        setTextPending(null);
+        setDraftDraw(null);
+        isDrawing.current = false;
+      }
+      if (e.key === 'Enter' && textPending) {
+        if (textValue.trim()) {
+          setDrawings(prev => [...prev, { id: Date.now().toString(), tool: 'text', points: [textPending.pt], color: T.cyan, text: textValue.trim() }]);
+        }
+        setTextPending(null);
+        setTextValue('');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [textPending, textValue]);
 
   // ── SVG drawing elements ──────────────────────────────────────────────────
-  const svgEl = (d: Drawing): React.ReactNode => {
+  const svgEl = useCallback((d: Drawing): React.ReactNode => {
     const W = mainRef.current?.clientWidth ?? 0;
     const H = mainRef.current?.clientHeight ?? 0;
+
     switch (d.tool) {
+
       case 'hline': {
         const c = toPixel(d.points[0].price, d.points[0].time); if (!c) return null;
         return (
           <g key={d.id}>
-            <line x1={0} y1={c.y} x2={W} y2={c.y} stroke={d.color} strokeWidth={1} strokeDasharray="5,3"/>
-            <text x={6} y={c.y - 4} fill={d.color} fontSize={10} fontFamily="'IBM Plex Mono',monospace">{d.points[0].price.toFixed(2)}</text>
+            <line x1={0} y1={c.y} x2={W} y2={c.y} stroke={d.color} strokeWidth={1} strokeDasharray="4,3"/>
+            <text x={8} y={c.y - 4} fill={d.color} fontSize={10} fontFamily="monospace">{d.points[0].price.toFixed(2)}</text>
           </g>
         );
       }
+
       case 'vline': {
         const c = toPixel(d.points[0].price, d.points[0].time); if (!c) return null;
-        return <line key={d.id} x1={c.x} y1={0} x2={c.x} y2={H} stroke={d.color} strokeWidth={1} strokeDasharray="5,3"/>;
+        return <line key={d.id} x1={c.x} y1={0} x2={c.x} y2={H} stroke={d.color} strokeWidth={1} strokeDasharray="4,3"/>;
       }
+
       case 'line': {
         if (d.points.length < 2) return null;
         const c0 = toPixel(d.points[0].price, d.points[0].time);
         const c1 = toPixel(d.points[1].price, d.points[1].time);
         if (!c0 || !c1) return null;
-        return <line key={d.id} x1={c0.x} y1={c0.y} x2={c1.x} y2={c1.y} stroke={d.color} strokeWidth={1.5}/>;
+        return (
+          <g key={d.id}>
+            <line x1={c0.x} y1={c0.y} x2={c1.x} y2={c1.y} stroke={d.color} strokeWidth={1.5}/>
+            <circle cx={c0.x} cy={c0.y} r={3} fill={d.color}/>
+            <circle cx={c1.x} cy={c1.y} r={3} fill={d.color}/>
+          </g>
+        );
       }
+
       case 'rect': {
         if (d.points.length < 2) return null;
         const c0 = toPixel(d.points[0].price, d.points[0].time);
         const c1 = toPixel(d.points[1].price, d.points[1].time);
         if (!c0 || !c1) return null;
-        return <rect key={d.id} x={Math.min(c0.x,c1.x)} y={Math.min(c0.y,c1.y)} width={Math.abs(c1.x-c0.x)} height={Math.abs(c1.y-c0.y)} stroke={d.color} strokeWidth={1} fill={`${d.color}18`}/>;
+        const x = Math.min(c0.x, c1.x), y = Math.min(c0.y, c1.y);
+        const w = Math.abs(c1.x - c0.x), h = Math.abs(c1.y - c0.y);
+        const pct = ((d.points[1].price - d.points[0].price) / d.points[0].price * 100).toFixed(2);
+        return (
+          <g key={d.id}>
+            <rect x={x} y={y} width={w} height={h} stroke={d.color} strokeWidth={1} fill={`${d.color}15`}/>
+            <text x={x + 4} y={y + 14} fill={d.color} fontSize={10} fontFamily="monospace">{pct}%</text>
+          </g>
+        );
       }
+
+      case 'measure': {
+        if (d.points.length < 2) return null;
+        const c0 = toPixel(d.points[0].price, d.points[0].time);
+        const c1 = toPixel(d.points[1].price, d.points[1].time);
+        if (!c0 || !c1) return null;
+        const pct = ((d.points[1].price - d.points[0].price) / d.points[0].price * 100);
+        const pctStr = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
+        const midX = (c0.x + c1.x) / 2;
+        const midY = (c0.y + c1.y) / 2;
+        const col = pct >= 0 ? T.up : T.down;
+        return (
+          <g key={d.id}>
+            <line x1={c0.x} y1={c0.y} x2={c1.x} y2={c1.y} stroke={col} strokeWidth={1.5} strokeDasharray="6,3"/>
+            <line x1={c0.x} y1={c0.y - 6} x2={c0.x} y2={c0.y + 6} stroke={col} strokeWidth={1.5}/>
+            <line x1={c1.x} y1={c1.y - 6} x2={c1.x} y2={c1.y + 6} stroke={col} strokeWidth={1.5}/>
+            <rect x={midX - 26} y={midY - 10} width={52} height={18} rx={3} fill={T.toolbar} stroke={col} strokeWidth={1}/>
+            <text x={midX} y={midY + 4} fill={col} fontSize={10} fontFamily="monospace" textAnchor="middle">{pctStr}</text>
+          </g>
+        );
+      }
+
+      case 'freehand': {
+        if (d.points.length < 2) return null;
+        const pts = d.points.map(p => {
+          const c = toPixel(p.price, p.time); return c ? `${c.x},${c.y}` : null;
+        }).filter(Boolean).join(' ');
+        if (!pts) return null;
+        return <polyline key={d.id} points={pts} stroke={d.color} strokeWidth={1.5} fill="none" strokeLinejoin="round" strokeLinecap="round"/>;
+      }
+
+      case 'polyline': {
+        if (d.points.length < 2) return null;
+        const pts = d.points.map(p => {
+          const c = toPixel(p.price, p.time); return c ? `${c.x},${c.y}` : null;
+        }).filter(Boolean).join(' ');
+        if (!pts) return null;
+        const circles = d.points.map((p, i) => {
+          const c = toPixel(p.price, p.time); if (!c) return null;
+          return <circle key={i} cx={c.x} cy={c.y} r={3} fill={d.color}/>;
+        });
+        return <g key={d.id}><polyline points={pts} stroke={d.color} strokeWidth={1.5} fill="none"/>{circles}</g>;
+      }
+
+      case 'text': {
+        const c = toPixel(d.points[0].price, d.points[0].time); if (!c) return null;
+        return (
+          <g key={d.id}>
+            <rect x={c.x} y={c.y - 14} width={(d.text?.length ?? 1) * 7 + 8} height={18} rx={2} fill="rgba(10,18,28,0.8)" stroke={d.color} strokeWidth={0.5}/>
+            <text x={c.x + 4} y={c.y} fill={d.color} fontSize={12} fontFamily="monospace">{d.text}</text>
+          </g>
+        );
+      }
+
       default: return null;
     }
-  };
+  }, [toPixel]);
 
   // ── Toolbar definition ────────────────────────────────────────────────────
   type BtnDef = { id: DrawTool | '_clear'; icon: React.ReactNode; label: string; };
   const toolbarSections: BtnDef[][] = [
-    [{ id: 'cursor', icon: Icons.cursor,   label: 'Cursor' }],
+    [{ id: 'cursor',   icon: Icons.cursor,   label: 'Cursor (Esc)' }],
     [
-      { id: 'line',   icon: Icons.trendUp,  label: 'Trend Line' },
-      { id: 'hline',  icon: Icons.hline,    label: 'Horizontal Line' },
-      { id: 'vline',  icon: Icons.vline,    label: 'Vertical Line' },
-      { id: 'rect',   icon: Icons.rect,     label: 'Rectangle' },
-      { id: 'cursor', icon: Icons.polyline, label: 'Polyline' },
+      { id: 'line',     icon: Icons.trendUp,  label: 'Trend Line' },
+      { id: 'hline',    icon: Icons.hline,    label: 'Horizontal Line' },
+      { id: 'vline',    icon: Icons.vline,    label: 'Vertical Line' },
+      { id: 'rect',     icon: Icons.rect,     label: 'Rectangle' },
+      { id: 'polyline', icon: Icons.polyline, label: 'Polyline (dbl-click to end)' },
     ],
     [
-      { id: 'cursor', icon: Icons.hlines,   label: 'H-Lines' },
-      { id: 'cursor', icon: Icons.measure,  label: 'Measure' },
-      { id: 'cursor', icon: Icons.pencil,   label: 'Freehand' },
-      { id: 'text',   icon: Icons.text,     label: 'Text' },
-      { id: 'cursor', icon: Icons.emoji,    label: 'Emoji' },
+      { id: 'measure',  icon: Icons.measure,  label: 'Measure' },
+      { id: 'freehand', icon: Icons.pencil,   label: 'Freehand' },
+      { id: 'text',     icon: Icons.text,     label: 'Text (click then type + Enter)' },
     ],
     [
-      { id: 'cursor', icon: Icons.ruler,    label: 'Ruler' },
-      { id: 'cursor', icon: Icons.zoomin,   label: 'Zoom In' },
+      { id: 'cursor',   icon: Icons.zoomin,   label: 'Zoom (use scroll wheel)' },
+      { id: 'cursor',   icon: Icons.ruler,    label: 'Ruler' },
     ],
     [
-      { id: 'cursor', icon: Icons.magnet,   label: 'Snap' },
-      { id: 'cursor', icon: Icons.lock,     label: 'Lock' },
-      { id: '_clear', icon: Icons.reset,    label: 'Clear All' },
-      { id: '_clear', icon: Icons.trash,    label: 'Trash' },
+      { id: '_clear',   icon: Icons.reset,    label: 'Clear All' },
+      { id: '_clear',   icon: Icons.trash,    label: 'Delete All' },
     ],
   ];
 
   const allDrawings = [...drawings, ...(draftDraw ? [draftDraw] : [])];
+
+  // Polyline in-progress preview (all accepted points + preview to cursor)
+  const polylinePreview: React.ReactNode = (() => {
+    if (drawTool !== 'polyline' || polylinePts.length === 0) return null;
+    const allPts = hoverPx ? [...polylinePts, fromPixel(hoverPx.x, hoverPx.y)].filter(Boolean) as DrawPoint[] : polylinePts;
+    const pts = allPts.map(p => { const c = toPixel(p.price, p.time); return c ? `${c.x},${c.y}` : null; }).filter(Boolean).join(' ');
+    if (!pts) return null;
+    const circles = polylinePts.map((p, i) => { const c = toPixel(p.price, p.time); if (!c) return null; return <circle key={i} cx={c.x} cy={c.y} r={3} fill={T.cyan}/>; });
+    return <g><polyline points={pts} stroke={T.cyan} strokeWidth={1.5} fill="none" strokeDasharray="6,3"/>{circles}</g>;
+  })();
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -800,7 +961,38 @@ export function CandlestickChart({ candles, currentPrice, selectedStrike, onLoad
               onMouseUp={onDrawUp}
             >
               {allDrawings.map(svgEl)}
+              {polylinePreview}
             </svg>
+
+            {/* Text input overlay — appears on click when text tool active */}
+            {textPending && (
+              <div style={{
+                position: 'absolute',
+                left: textPending.px,
+                top:  textPending.py - 18,
+                zIndex: 20,
+              }}>
+                <input
+                  autoFocus
+                  value={textValue}
+                  onChange={e => setTextValue(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && textValue.trim()) {
+                      setDrawings(prev => [...prev, { id: Date.now().toString(), tool: 'text', points: [textPending.pt], color: T.cyan, text: textValue.trim() }]);
+                      setTextPending(null); setTextValue('');
+                    }
+                    if (e.key === 'Escape') { setTextPending(null); setTextValue(''); }
+                  }}
+                  placeholder="Type text + Enter"
+                  style={{
+                    background: 'rgba(10,18,28,0.92)', color: T.cyan,
+                    border: `1px solid ${T.cyan}`, borderRadius: 3,
+                    fontFamily: 'monospace', fontSize: 12,
+                    padding: '2px 6px', outline: 'none', minWidth: 120,
+                  }}
+                />
+              </div>
+            )}
           </div>
 
           {/* RSI sub-chart */}
