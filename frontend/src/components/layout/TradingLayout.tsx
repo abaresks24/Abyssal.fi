@@ -5,6 +5,8 @@ import { TickerBar } from './TickerBar';
 import { MarketSelector } from '@/components/market/MarketSelector';
 import { IVPanel } from '@/components/market/IVPanel';
 import { KeeperStatus } from '@/components/market/KeeperStatus';
+import { OrderBook } from '@/components/market/OrderBook';
+import { TradeHistory } from '@/components/market/TradeHistory';
 import { ChartHeader } from '@/components/chart/ChartHeader';
 import { CandlestickChart } from '@/components/chart/CandlestickChart';
 import { TimeframeSelector, TIMEFRAMES } from '@/components/chart/TimeframeSelector';
@@ -37,7 +39,7 @@ function CenterPanel() {
         </div>
       </div>
 
-      {/* Chart — fills all remaining space */}
+      {/* Chart — flex: 1 */}
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         {isLoading ? (
           <div style={{
@@ -55,6 +57,11 @@ function CenterPanel() {
             onLoadMore={loadMore}
           />
         )}
+      </div>
+
+      {/* Option Builder — fixed 280px height below chart */}
+      <div style={{ height: 280, borderTop: '1px solid var(--border)', flexShrink: 0, overflowY: 'auto', background: 'var(--bg1)' }}>
+        <OptionBuilder />
       </div>
 
     </div>
@@ -86,7 +93,7 @@ function LeftPanel() {
 function RightPanel() {
   return (
     <div style={{
-      width: 340,
+      width: 240,
       background: 'var(--bg1)',
       borderLeft: '1px solid var(--border)',
       display: 'flex',
@@ -94,8 +101,13 @@ function RightPanel() {
       overflow: 'hidden',
       flexShrink: 0,
     }}>
-      <div style={{ flex: 1, overflowY: 'auto' }}>
-        <OptionBuilder />
+      {/* Order Book — top, flex 1 */}
+      <div style={{ flex: 1, minHeight: 0, borderBottom: '1px solid var(--border)' }}>
+        <OrderBook />
+      </div>
+      {/* Options Flow / Trade History — bottom, fixed height */}
+      <div style={{ height: 260, flexShrink: 0 }}>
+        <TradeHistory />
       </div>
     </div>
   );
