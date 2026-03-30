@@ -1,15 +1,14 @@
 'use client';
 import React, { useState, useRef, useEffect } from 'react';
-import { PRIVY_ENABLED } from '@/components/WalletProvider';
+import { usePrivy, useLogout } from '@privy-io/react-auth';
+import { useWallets } from '@privy-io/react-auth/solana';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { useWalletModal } from '@solana/wallet-adapter-react-ui';
+import { PRIVY_ENABLED, usePrivyReady } from '@/components/WalletProvider';
 
 // ── Privy-powered button (only rendered when PRIVY_ENABLED) ─────────────────
 
 function PrivyConnectButton() {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { usePrivy, useLogout } = require('@privy-io/react-auth');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { useWallets } = require('@privy-io/react-auth/solana');
-
   const { ready, authenticated, connectOrCreateWallet } = usePrivy();
   const { logout } = useLogout();
   const { wallets } = useWallets();
@@ -76,8 +75,6 @@ function PrivyConnectButton() {
 // ── Fallback: Solana wallet-adapter button ───────────────────────────────────
 
 function AdapterConnectButton() {
-  const { useWallet } = require('@solana/wallet-adapter-react');
-  const { useWalletModal } = require('@solana/wallet-adapter-react-ui');
   const { publicKey, disconnect } = useWallet();
   const { setVisible } = useWalletModal();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -138,6 +135,12 @@ function AdapterConnectButton() {
 // ── Public export ────────────────────────────────────────────────────────────
 
 export function ConnectButton() {
+  const privyReady = usePrivyReady();
+  // Don't render PrivyConnectButton until PrivyProvider is in the tree.
+  // Avoids "usePrivy must be used within a PrivyProvider" crash.
+  if (PRIVY_ENABLED && !privyReady) {
+    return <button disabled style={btnStyle({ muted: true })}>Loading…</button>;
+  }
   return PRIVY_ENABLED ? <PrivyConnectButton /> : <AdapterConnectButton />;
 }
 

@@ -1,5 +1,5 @@
 'use client';
-import { type FC, type ReactNode, useMemo, useState, useEffect } from 'react';
+import { type FC, type ReactNode, useMemo, useState, useEffect, createContext, useContext } from 'react';
 
 // Privy — account abstraction + unified wallet modal
 import { PrivyProvider } from '@privy-io/react-auth';
@@ -32,6 +32,11 @@ const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? '';
 export const PRIVY_ENABLED =
   PRIVY_APP_ID.length > 5 && !PRIVY_APP_ID.includes('YOUR_PRIVY');
 
+// Context that signals PrivyProvider is mounted and safe to call Privy hooks.
+// ConnectButton consumes this to avoid calling usePrivy() before the provider exists.
+export const PrivyReadyContext = createContext(false);
+export const usePrivyReady = () => useContext(PrivyReadyContext);
+
 // Solana adapter providers (shared regardless of Privy status)
 function SolanaAdapters({ children }: { children: ReactNode }) {
   const network = WalletAdapterNetwork.Devnet;
@@ -63,32 +68,38 @@ export const WalletContextProvider: FC<Props> = ({ children }) => {
 
   if (!mounted || !PRIVY_ENABLED) {
     // SSR pass or no valid Privy app ID → Solana adapter only
-    return <SolanaAdapters>{children}</SolanaAdapters>;
+    return (
+      <PrivyReadyContext.Provider value={false}>
+        <SolanaAdapters>{children}</SolanaAdapters>
+      </PrivyReadyContext.Provider>
+    );
   }
 
   return (
-    <PrivyProvider
-      appId={PRIVY_APP_ID}
-      config={{
-        appearance: {
-          theme: 'dark',
-          accentColor: '#55c3e9',
-          logo: '/logo.svg',
-          walletChainType: 'solana-only',
-          landingHeader: 'Connect to Abyssal',
-          loginMessage: 'Trade on-chain options on Solana',
-          walletList: ['detected_wallets', 'phantom', 'solflare', 'backpack', 'coinbase_wallet'],
-        },
-        loginMethods: ['wallet', 'email'],
-        embeddedWallets: {
-          solana: { createOnLogin: 'users-without-wallets' },
-        },
-        externalWallets: {
-          solana: { connectors: toSolanaWalletConnectors() },
-        },
-      }}
-    >
-      <SolanaAdapters>{children}</SolanaAdapters>
-    </PrivyProvider>
+    <PrivyReadyContext.Provider value={true}>
+      <PrivyProvider
+        appId={PRIVY_APP_ID}
+        config={{
+          appearance: {
+            theme: 'dark',
+            accentColor: '#55c3e9',
+            logo: '/logo.svg',
+            walletChainType: 'solana-only',
+            landingHeader: 'Connect to Abyssal',
+            loginMessage: 'Trade on-chain options on Solana',
+            walletList: ['detected_wallets', 'phantom', 'solflare', 'backpack', 'coinbase_wallet'],
+          },
+          loginMethods: ['wallet', 'email'],
+          embeddedWallets: {
+            solana: { createOnLogin: 'users-without-wallets' },
+          },
+          externalWallets: {
+            solana: { connectors: toSolanaWalletConnectors() },
+          },
+        }}
+      >
+        <SolanaAdapters>{children}</SolanaAdapters>
+      </PrivyProvider>
+    </PrivyReadyContext.Provider>
   );
 };
