@@ -1,5 +1,5 @@
 'use client';
-import { type FC, type ReactNode, useMemo } from 'react';
+import { type FC, type ReactNode, useMemo, useState, useEffect } from 'react';
 
 // Privy — account abstraction + unified wallet modal
 import { PrivyProvider } from '@privy-io/react-auth';
@@ -25,12 +25,16 @@ import '@solana/wallet-adapter-react-ui/styles.css';
 
 interface Props { children: ReactNode; }
 
+// Privy is enabled only when a real app ID is configured.
+// During local builds with the placeholder value, we skip Privy entirely
+// so `next build` doesn't throw during prerender.
 const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? '';
+export const PRIVY_ENABLED =
+  PRIVY_APP_ID.length > 5 && !PRIVY_APP_ID.includes('YOUR_PRIVY');
 
-export const WalletContextProvider: FC<Props> = ({ children }) => {
+// Solana adapter providers (shared regardless of Privy status)
+function SolanaAdapters({ children }: { children: ReactNode }) {
   const network = WalletAdapterNetwork.Devnet;
-
-  // All standard Solana wallet adapters — used by anchor_client via useWallet()
   const wallets = useMemo(() => [
     new PhantomWalletAdapter(),
     new SolflareWalletAdapter({ network }),
@@ -44,48 +48,47 @@ export const WalletContextProvider: FC<Props> = ({ children }) => {
   ], [network]);
 
   return (
+    <ConnectionProvider endpoint={SOLANA_RPC}>
+      <WalletProvider wallets={wallets} autoConnect>
+        <WalletModalProvider>{children}</WalletModalProvider>
+      </WalletProvider>
+    </ConnectionProvider>
+  );
+}
+
+export const WalletContextProvider: FC<Props> = ({ children }) => {
+  // Delay Privy initialisation to the client to avoid SSR prerender errors.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  if (!mounted || !PRIVY_ENABLED) {
+    // SSR pass or no valid Privy app ID → Solana adapter only
+    return <SolanaAdapters>{children}</SolanaAdapters>;
+  }
+
+  return (
     <PrivyProvider
       appId={PRIVY_APP_ID}
       config={{
-        // Dark theme matching Abyssal palette
         appearance: {
           theme: 'dark',
           accentColor: '#55c3e9',
           logo: '/logo.svg',
-          // Show only Solana wallets in the modal
           walletChainType: 'solana-only',
           landingHeader: 'Connect to Abyssal',
           loginMessage: 'Trade on-chain options on Solana',
-          // Prioritise common Solana wallets in the list
-          walletList: [
-            'detected_wallets',
-            'phantom',
-            'solflare',
-            'backpack',
-            'coinbase_wallet',
-          ],
+          walletList: ['detected_wallets', 'phantom', 'solflare', 'backpack', 'coinbase_wallet'],
         },
         loginMethods: ['wallet', 'email'],
-        // Account abstraction: auto-create an embedded Solana wallet for
-        // users who connect without a browser extension (email login, etc.)
         embeddedWallets: {
           solana: { createOnLogin: 'users-without-wallets' },
         },
-        // External wallet connectors (Phantom, Solflare, Backpack, etc.)
         externalWallets: {
           solana: { connectors: toSolanaWalletConnectors() },
         },
       }}
     >
-      {/* ConnectionProvider gives anchor_client its RPC endpoint */}
-      <ConnectionProvider endpoint={SOLANA_RPC}>
-        {/* WalletProvider + WalletModalProvider kept for useAnchorWallet() */}
-        <WalletProvider wallets={wallets} autoConnect>
-          <WalletModalProvider>
-            {children}
-          </WalletModalProvider>
-        </WalletProvider>
-      </ConnectionProvider>
+      <SolanaAdapters>{children}</SolanaAdapters>
     </PrivyProvider>
   );
 };
