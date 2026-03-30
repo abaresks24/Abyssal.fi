@@ -1,15 +1,9 @@
 'use client';
 import React from 'react';
 import Image from 'next/image';
-import { useWallet } from '@solana/wallet-adapter-react';
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { ConnectButton } from '@/components/ui/ConnectButton';
 
 export const Nav = React.memo(function Nav() {
-  const { publicKey } = useWallet();
-  const addr = publicKey
-    ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
-    : null;
-
   return (
     <nav
       style={{
@@ -32,36 +26,9 @@ export const Nav = React.memo(function Nav() {
         </span>
       </div>
 
-      {/* Spacer */}
       <div style={{ flex: 1 }} />
 
-      {/* Network badge */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 5,
-        padding: '3px 8px',
-        border: '1px solid var(--border2)',
-        borderRadius: 4,
-        fontSize: 11,
-        color: 'var(--text3)',
-        fontFamily: 'var(--mono)',
-      }}>
-        <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--green)', display: 'inline-block' }} />
-        Devnet
-      </div>
-
-      {/* Wallet */}
-      <div style={{ fontSize: 12 }}>
-        <WalletMultiButton style={{
-          height: 28,
-          padding: '0 12px',
-          fontSize: 12,
-          background: 'var(--bg3)',
-          border: '1px solid var(--border2)',
-          borderRadius: 4,
-          color: 'var(--text)',
-          fontFamily: 'var(--font)',
-        }} />
-      </div>
+      <ConnectButton />
     </nav>
   );
 });
