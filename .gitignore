@@ -5,10 +5,12 @@
 frontend/.env.local
 iv_engine/.env
 
-# Solana keypairs
+# Solana keypairs — block all JSON except known safe files
 *.json
 !tsconfig.json
 !frontend/tsconfig.json
+!package-lock.json
+!frontend/package-lock.json
 
 # Rust / Anchor
 target/
