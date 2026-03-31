@@ -46,6 +46,9 @@ const nextConfig = {
       viem: path.resolve(__dirname, 'node_modules/viem'),
       '@farcaster/mini-app-solana': emptyModule,
       '@solana-program/memo':       emptyModule,
+      '@solana/kit':                emptyModule,
+      '@solana-program/token':      emptyModule,
+      '@solana-program/system':     emptyModule,
     };
 
     config.experiments = {
