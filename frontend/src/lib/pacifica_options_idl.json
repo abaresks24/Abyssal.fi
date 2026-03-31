@@ -1,0 +1,2387 @@
+{
+  "address": "CBkvR8SeN6j8RQKB7dSxG3dza2v71XHmWEe8LgfMW1hG",
+  "metadata": {
+    "name": "pacifica_options",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Decentralized options market built on Pacifica perpetuals on Solana"
+  },
+  "docs": [
+    "PacificaOptions — Decentralized options market on Pacifica perpetuals",
+    "",
+    "Fee Schedule:",
+    "- Platform trading fee: 0.05% (5 basis points) flat",
+    "- Settlement fee (ITM): 0.05% of payoff, capped at 50 USDC",
+    "- Settlement fee (OTM): 0%"
+  ],
+  "instructions": [
+    {
+      "name": "add_liquidity",
+      "docs": [
+        "Add USDC liquidity to an AMM pool"
+      ],
+      "discriminator": [
+        181,
+        157,
+        89,
+        67,
+        143,
+        182,
+        52,
+        72
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  117,
+                  115,
+                  100,
+                  99
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "amm_pool",
+          "writable": true
+        },
+        {
+          "name": "lp_position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "provider"
+              },
+              {
+                "kind": "account",
+                "path": "amm_pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "provider_usdc",
+          "writable": true
+        },
+        {
+          "name": "provider",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "AddLiquidityArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "buy_option",
+      "docs": [
+        "Buy an option (platform fee = 5 bps applied on top of BS premium)"
+      ],
+      "discriminator": [
+        242,
+        253,
+        221,
+        183,
+        67,
+        244,
+        140,
+        119
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_vault",
+          "docs": [
+            "Vault USDC token account (receives premium)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  117,
+                  115,
+                  100,
+                  99
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "amm_pool",
+          "docs": [
+            "AMM pool for this options series"
+          ],
+          "writable": true
+        },
+        {
+          "name": "iv_oracle",
+          "docs": [
+            "IV Oracle for this market"
+          ]
+        },
+        {
+          "name": "position",
+          "docs": [
+            "New position account for the buyer"
+          ],
+          "writable": true
+        },
+        {
+          "name": "buyer_usdc",
+          "docs": [
+            "Buyer's USDC token account (pays premium)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "buyer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "BuyOptionArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "exercise_option",
+      "docs": [
+        "Manually exercise an ITM option",
+        "Settlement fee = 5 bps of payoff, capped at 50 USDC"
+      ],
+      "discriminator": [
+        231,
+        98,
+        131,
+        183,
+        245,
+        93,
+        122,
+        48
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  117,
+                  115,
+                  100,
+                  99
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "iv_oracle"
+        },
+        {
+          "name": "position",
+          "writable": true
+        },
+        {
+          "name": "owner_usdc",
+          "docs": [
+            "Owner's USDC account (receives payoff)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "ExerciseOptionArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "initialize_amm_pool",
+      "docs": [
+        "Initialize an AMM pool for a specific options series"
+      ],
+      "discriminator": [
+        20,
+        58,
+        19,
+        89,
+        14,
+        193,
+        139,
+        31
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "amm_pool",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "InitAmmPoolArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "initialize_iv_oracle",
+      "docs": [
+        "Initialize an IV oracle account for a given market"
+      ],
+      "discriminator": [
+        106,
+        178,
+        217,
+        5,
+        20,
+        230,
+        159,
+        148
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "iv_oracle",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "market_discriminant",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "initialize_vault",
+      "docs": [
+        "Initialize the protocol vault"
+      ],
+      "discriminator": [
+        48,
+        191,
+        163,
+        44,
+        71,
+        129,
+        63,
+        164
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_vault",
+          "docs": [
+            "The USDC token account that the vault will control"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  117,
+                  115,
+                  100,
+                  99
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_mint",
+          "docs": [
+            "USDC mint (6 decimals)"
+          ]
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "Protocol admin / authority"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "keeper",
+          "docs": [
+            "Keeper address (can be same as authority initially)"
+          ]
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "pause_vault",
+      "docs": [
+        "Pause the vault (halts all user-facing instructions)"
+      ],
+      "discriminator": [
+        250,
+        6,
+        228,
+        57,
+        6,
+        104,
+        19,
+        210
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "rebalance_delta",
+      "docs": [
+        "Rebalance portfolio delta via perpetual hedges (keeper-only)"
+      ],
+      "discriminator": [
+        106,
+        229,
+        255,
+        94,
+        120,
+        8,
+        15,
+        216
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "keeper",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "RebalanceDeltaArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "remove_liquidity",
+      "docs": [
+        "Remove liquidity from an AMM pool and receive proportional USDC"
+      ],
+      "discriminator": [
+        80,
+        85,
+        209,
+        72,
+        24,
+        206,
+        177,
+        108
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  117,
+                  115,
+                  100,
+                  99
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "amm_pool",
+          "writable": true
+        },
+        {
+          "name": "lp_position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "provider"
+              },
+              {
+                "kind": "account",
+                "path": "amm_pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "provider_usdc",
+          "writable": true
+        },
+        {
+          "name": "provider",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "RemoveLiquidityArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "sell_option",
+      "docs": [
+        "Sell (close) an option position back to the pool",
+        "Platform fee = 5 bps deducted from proceeds"
+      ],
+      "discriminator": [
+        23,
+        32,
+        9,
+        222,
+        166,
+        50,
+        188,
+        106
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_vault",
+          "docs": [
+            "Vault USDC (sends back proceeds minus fee)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  117,
+                  115,
+                  100,
+                  99
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "amm_pool",
+          "writable": true
+        },
+        {
+          "name": "iv_oracle"
+        },
+        {
+          "name": "position",
+          "docs": [
+            "Seller's position account (must be owned by seller)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "seller_usdc",
+          "docs": [
+            "Seller's USDC account (receives proceeds)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "seller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SellOptionArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "settle_expired",
+      "docs": [
+        "Auto-settle expired positions (keeper-only)"
+      ],
+      "discriminator": [
+        187,
+        68,
+        57,
+        40,
+        121,
+        72,
+        73,
+        161
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  117,
+                  115,
+                  100,
+                  99
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "iv_oracle"
+        },
+        {
+          "name": "position",
+          "docs": [
+            "Position to settle — owner passed as remaining_accounts or via constraint"
+          ],
+          "writable": true
+        },
+        {
+          "name": "holder_usdc",
+          "docs": [
+            "Option holder's USDC (receives any payoff if ITM)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "keeper",
+          "docs": [
+            "Keeper must sign"
+          ],
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SettleExpiredArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "unpause_vault",
+      "docs": [
+        "Unpause the vault"
+      ],
+      "discriminator": [
+        125,
+        29,
+        213,
+        213,
+        114,
+        155,
+        125,
+        63
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "update_iv_params",
+      "docs": [
+        "Update IV surface parameters (keeper-only)"
+      ],
+      "discriminator": [
+        150,
+        63,
+        88,
+        61,
+        79,
+        144,
+        94,
+        127
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "iv_oracle",
+          "writable": true
+        },
+        {
+          "name": "keeper",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "UpdateIVParamsArgsExt"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "AmmPool",
+      "discriminator": [
+        54,
+        82,
+        185,
+        138,
+        179,
+        191,
+        211,
+        169
+      ]
+    },
+    {
+      "name": "IVOracle",
+      "discriminator": [
+        31,
+        42,
+        9,
+        165,
+        215,
+        145,
+        31,
+        78
+      ]
+    },
+    {
+      "name": "LPPosition",
+      "discriminator": [
+        196,
+        56,
+        115,
+        198,
+        14,
+        117,
+        32,
+        224
+      ]
+    },
+    {
+      "name": "OptionPosition",
+      "discriminator": [
+        212,
+        247,
+        167,
+        73,
+        56,
+        224,
+        204,
+        102
+      ]
+    },
+    {
+      "name": "OptionVault",
+      "discriminator": [
+        99,
+        120,
+        255,
+        154,
+        75,
+        85,
+        29,
+        36
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "DeltaRebalancedEvent",
+      "discriminator": [
+        116,
+        119,
+        117,
+        92,
+        63,
+        5,
+        66,
+        46
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "ProtocolPaused",
+      "msg": "Protocol is paused"
+    },
+    {
+      "code": 6001,
+      "name": "Unauthorized",
+      "msg": "Unauthorized: caller is not the vault authority"
+    },
+    {
+      "code": 6002,
+      "name": "UnauthorizedKeeper",
+      "msg": "Unauthorized: caller is not the designated keeper"
+    },
+    {
+      "code": 6003,
+      "name": "OptionExpired",
+      "msg": "Option has already expired"
+    },
+    {
+      "code": 6004,
+      "name": "OptionNotExpired",
+      "msg": "Option has not yet expired"
+    },
+    {
+      "code": 6005,
+      "name": "AlreadySettled",
+      "msg": "Option has already been settled"
+    },
+    {
+      "code": 6006,
+      "name": "OutOfTheMoney",
+      "msg": "Option is out-of-the-money; no payoff"
+    },
+    {
+      "code": 6007,
+      "name": "InvalidStrike",
+      "msg": "Invalid strike price: must be > 0"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidExpiry",
+      "msg": "Invalid expiry: must be in the future"
+    },
+    {
+      "code": 6009,
+      "name": "InvalidSize",
+      "msg": "Invalid option size: must be > 0"
+    },
+    {
+      "code": 6010,
+      "name": "ExpiryTooFar",
+      "msg": "Expiry too far in the future (max 90 days)"
+    },
+    {
+      "code": 6011,
+      "name": "ExpiryTooClose",
+      "msg": "Expiry too close (min 1 hour)"
+    },
+    {
+      "code": 6012,
+      "name": "MathOverflow",
+      "msg": "Arithmetic overflow in fixed-point math"
+    },
+    {
+      "code": 6013,
+      "name": "DivisionByZero",
+      "msg": "Division by zero"
+    },
+    {
+      "code": 6014,
+      "name": "ZeroPremium",
+      "msg": "Computed premium is zero or negative"
+    },
+    {
+      "code": 6015,
+      "name": "IVOutOfRange",
+      "msg": "IV value out of valid range [1%, 500%]"
+    },
+    {
+      "code": 6016,
+      "name": "StalePriceFeed",
+      "msg": "Price feed is stale (older than 60 seconds)"
+    },
+    {
+      "code": 6017,
+      "name": "InsufficientCollateral",
+      "msg": "Insufficient collateral in vault"
+    },
+    {
+      "code": 6018,
+      "name": "InsufficientLiquidity",
+      "msg": "Insufficient liquidity in AMM pool"
+    },
+    {
+      "code": 6019,
+      "name": "SlippageExceeded",
+      "msg": "Slippage tolerance exceeded"
+    },
+    {
+      "code": 6020,
+      "name": "KInvariantViolated",
+      "msg": "AMM pool k-invariant violated"
+    },
+    {
+      "code": 6021,
+      "name": "ZeroLpTokens",
+      "msg": "LP token amount is zero"
+    },
+    {
+      "code": 6022,
+      "name": "MinLpTokensNotMet",
+      "msg": "Minimum LP tokens not met"
+    },
+    {
+      "code": 6023,
+      "name": "InsufficientLpTokens",
+      "msg": "Insufficient LP tokens to remove"
+    },
+    {
+      "code": 6024,
+      "name": "InsufficientUsdc",
+      "msg": "Insufficient USDC balance"
+    },
+    {
+      "code": 6025,
+      "name": "InvalidUsdcMint",
+      "msg": "Invalid USDC mint"
+    },
+    {
+      "code": 6026,
+      "name": "InvalidTokenAccountOwner",
+      "msg": "Invalid token account owner"
+    },
+    {
+      "code": 6027,
+      "name": "DeltaBalanced",
+      "msg": "Delta imbalance within acceptable threshold; rebalance not needed"
+    },
+    {
+      "code": 6028,
+      "name": "RebalanceSizeTooLarge",
+      "msg": "Rebalance size exceeds maximum allowed"
+    },
+    {
+      "code": 6029,
+      "name": "IVOracleStale",
+      "msg": "IV oracle data is too old"
+    },
+    {
+      "code": 6030,
+      "name": "IVParamsUnchanged",
+      "msg": "IV parameters have not changed"
+    },
+    {
+      "code": 6031,
+      "name": "SettlementFeeCapExceeded",
+      "msg": "Settlement fee exceeds cap"
+    },
+    {
+      "code": 6032,
+      "name": "InvalidSettlementPrice",
+      "msg": "Invalid settlement price"
+    },
+    {
+      "code": 6033,
+      "name": "UnknownMarket",
+      "msg": "Unknown market identifier"
+    },
+    {
+      "code": 6034,
+      "name": "MarketNotSupported",
+      "msg": "Market is not supported"
+    },
+    {
+      "code": 6035,
+      "name": "NegativeSqrtInput",
+      "msg": "Square root input is negative"
+    },
+    {
+      "code": 6036,
+      "name": "LogNonPositive",
+      "msg": "Logarithm input must be positive"
+    },
+    {
+      "code": 6037,
+      "name": "U64Overflow",
+      "msg": "Value exceeds u64 maximum"
+    }
+  ],
+  "types": [
+    {
+      "name": "AddLiquidityArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_discriminant",
+            "type": "u8"
+          },
+          {
+            "name": "option_type",
+            "type": "u8"
+          },
+          {
+            "name": "strike",
+            "type": "u64"
+          },
+          {
+            "name": "expiry",
+            "type": "i64"
+          },
+          {
+            "name": "usdc_amount",
+            "docs": [
+              "USDC amount to deposit, 6 dec"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "min_lp_tokens",
+            "docs": [
+              "Minimum LP tokens to receive (slippage protection)"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AmmPool",
+      "docs": [
+        "Constant-product AMM pool for a specific (market, type, strike, expiry) series"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "vault",
+            "docs": [
+              "Parent vault"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "market",
+            "docs": [
+              "Underlying market"
+            ],
+            "type": {
+              "defined": {
+                "name": "Market"
+              }
+            }
+          },
+          {
+            "name": "option_type",
+            "docs": [
+              "Call or Put"
+            ],
+            "type": {
+              "defined": {
+                "name": "OptionType"
+              }
+            }
+          },
+          {
+            "name": "strike",
+            "docs": [
+              "Strike price (6 dec USDC)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "expiry",
+            "docs": [
+              "Expiry timestamp"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "reserve_options",
+            "docs": [
+              "Option units in the pool reserve (6 dec)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "reserve_usdc",
+            "docs": [
+              "USDC in the pool reserve (6 dec)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "k_invariant_lo",
+            "docs": [
+              "k = reserve_options * reserve_usdc (constant product invariant)",
+              "stored as u128 to avoid overflow"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "k_invariant_hi",
+            "type": "u64"
+          },
+          {
+            "name": "total_lp_tokens",
+            "docs": [
+              "Total LP tokens minted (6 dec)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "fees_earned",
+            "docs": [
+              "Cumulative fees earned by LPs (6 dec USDC)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "last_rebalance",
+            "docs": [
+              "Last rebalance timestamp"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "_padding",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "BuyOptionArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_discriminant",
+            "type": "u8"
+          },
+          {
+            "name": "option_type",
+            "type": "u8"
+          },
+          {
+            "name": "strike",
+            "type": "u64"
+          },
+          {
+            "name": "expiry",
+            "type": "i64"
+          },
+          {
+            "name": "size",
+            "type": "u64"
+          },
+          {
+            "name": "max_premium",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DeltaRebalancedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "previous_delta",
+            "type": "i64"
+          },
+          {
+            "name": "hedge_size",
+            "type": "u64"
+          },
+          {
+            "name": "is_buy",
+            "type": "bool"
+          },
+          {
+            "name": "new_delta",
+            "type": "i64"
+          },
+          {
+            "name": "target_delta",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ExerciseOptionArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_discriminant",
+            "type": "u8"
+          },
+          {
+            "name": "option_type",
+            "type": "u8"
+          },
+          {
+            "name": "strike",
+            "type": "u64"
+          },
+          {
+            "name": "expiry",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "IVOracle",
+      "docs": [
+        "On-chain IV oracle for a single market",
+        "Stores the AFVR surface parameters and a rolling price buffer"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "vault",
+            "docs": [
+              "Parent vault"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "market",
+            "docs": [
+              "Which underlying asset"
+            ],
+            "type": {
+              "defined": {
+                "name": "Market"
+              }
+            }
+          },
+          {
+            "name": "iv_atm",
+            "docs": [
+              "ATM implied volatility (scaled 1_000_000, i.e. 1.0 = 100%)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "iv_skew_rho",
+            "docs": [
+              "Skew (rho): signed, scaled 1_000_000"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "iv_curvature_phi",
+            "docs": [
+              "Curvature (phi): scaled 1_000_000"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "theta_param",
+            "docs": [
+              "Term structure parameter (theta): scaled 1_000_000"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "last_update",
+            "docs": [
+              "Last update timestamp"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "price_buffer",
+            "docs": [
+              "Rolling price buffer (60 observations, ~1 per minute)"
+            ],
+            "type": {
+              "defined": {
+                "name": "PriceBuffer"
+              }
+            }
+          },
+          {
+            "name": "latest_price",
+            "docs": [
+              "Latest oracle price (6 dec USDC)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "latest_price_ts",
+            "docs": [
+              "Latest price timestamp"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "_padding",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "IVParams",
+      "docs": [
+        "IV parameterisation stored on-chain (AFVR surface)"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "iv_atm",
+            "docs": [
+              "ATM implied volatility in fixed-point (1_000_000 = 100%)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "iv_skew_rho",
+            "docs": [
+              "Skew parameter rho (signed, scaled by 1_000_000)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "iv_curvature_phi",
+            "docs": [
+              "Curvature parameter phi (scaled by 1_000_000)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "theta_param",
+            "docs": [
+              "Term-structure theta (scaled by 1_000_000)"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "InitAmmPoolArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_discriminant",
+            "type": "u8"
+          },
+          {
+            "name": "option_type",
+            "type": "u8"
+          },
+          {
+            "name": "strike",
+            "type": "u64"
+          },
+          {
+            "name": "expiry",
+            "type": "i64"
+          },
+          {
+            "name": "initial_options",
+            "type": "u64"
+          },
+          {
+            "name": "initial_usdc",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LPPosition",
+      "docs": [
+        "LP position tracking liquidity provided to an AMM pool"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "lp_tokens",
+            "type": "u64"
+          },
+          {
+            "name": "usdc_deposited",
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "_padding",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Market",
+      "docs": [
+        "Supported underlying markets"
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "BTC"
+          },
+          {
+            "name": "ETH"
+          },
+          {
+            "name": "SOL"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OptionPosition",
+      "docs": [
+        "A single buyer's option position"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "Bump for PDA"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "owner",
+            "docs": [
+              "Owner wallet"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "vault",
+            "docs": [
+              "Reference to the parent vault"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "market",
+            "docs": [
+              "Underlying market"
+            ],
+            "type": {
+              "defined": {
+                "name": "Market"
+              }
+            }
+          },
+          {
+            "name": "option_type",
+            "docs": [
+              "Call or Put"
+            ],
+            "type": {
+              "defined": {
+                "name": "OptionType"
+              }
+            }
+          },
+          {
+            "name": "strike",
+            "docs": [
+              "Strike price in USDC, 6 decimal fixed-point",
+              "e.g. 70_000_000_000 = $70,000.000000"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "expiry",
+            "docs": [
+              "Unix timestamp at which the option expires"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "size",
+            "docs": [
+              "Size in underlying units, 6 decimal fixed-point",
+              "e.g. 1_000_000 = 1.000000 BTC"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "premium_paid",
+            "docs": [
+              "Total USDC premium paid (including fees), 6 dec"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "entry_iv",
+            "docs": [
+              "Entry IV captured at time of purchase (scaled 1_000_000)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "entry_delta",
+            "docs": [
+              "Delta at entry (signed, scaled 1_000_000)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "settled",
+            "docs": [
+              "Whether this position has been settled / exercised"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "payoff_received",
+            "docs": [
+              "Payoff received on settlement (0 if OTM), 6 dec USDC"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Creation timestamp"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "_padding",
+            "docs": [
+              "Reserved"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "OptionType",
+      "docs": [
+        "Call or Put"
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Call"
+          },
+          {
+            "name": "Put"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OptionVault",
+      "docs": [
+        "Root vault account – one per protocol deployment"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for PDA derivation"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "authority",
+            "docs": [
+              "Protocol authority (admin / upgrader)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "keeper",
+            "docs": [
+              "Designated keeper (IV updates, rebalancing, auto-settle)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "usdc_mint",
+            "docs": [
+              "USDC mint this vault accepts"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "usdc_vault",
+            "docs": [
+              "Vault USDC token account (holds all collateral)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "total_collateral",
+            "docs": [
+              "Total USDC collateral locked for open options (6 dec)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "open_interest",
+            "docs": [
+              "Total open interest in notional USDC (6 dec)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "delta_net",
+            "docs": [
+              "Net delta of all open positions (signed, scaled 1_000_000)",
+              "Positive = net long delta, negative = net short delta"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "iv_params",
+            "docs": [
+              "Current IV surface parameters (updated by keeper)"
+            ],
+            "type": {
+              "defined": {
+                "name": "IVParams"
+              }
+            }
+          },
+          {
+            "name": "last_iv_update",
+            "docs": [
+              "Unix timestamp of last IV parameter update"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "fees_collected",
+            "docs": [
+              "Cumulative platform fees collected (6 dec USDC)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "paused",
+            "docs": [
+              "Whether the protocol is halted"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "_padding",
+            "docs": [
+              "Reserved space for future fields"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "PriceBuffer",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "prices",
+            "docs": [
+              "Circular array of price observations (6 dec USDC)"
+            ],
+            "type": {
+              "array": [
+                "u64",
+                60
+              ]
+            }
+          },
+          {
+            "name": "timestamps",
+            "docs": [
+              "Timestamps for each price observation"
+            ],
+            "type": {
+              "array": [
+                "i64",
+                60
+              ]
+            }
+          },
+          {
+            "name": "head",
+            "docs": [
+              "Write head index (next slot to overwrite)"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "count",
+            "docs": [
+              "Number of valid observations stored (0 to PRICE_BUFFER_SIZE)"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RebalanceDeltaArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "target_delta",
+            "docs": [
+              "Target delta position to achieve (signed, scaled 1e6)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "hedge_size",
+            "docs": [
+              "Notional USDC size of the hedge trade, 6 dec"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "is_buy",
+            "docs": [
+              "Direction: true = buy perp (positive delta hedge), false = sell perp"
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RemoveLiquidityArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_discriminant",
+            "type": "u8"
+          },
+          {
+            "name": "option_type",
+            "type": "u8"
+          },
+          {
+            "name": "strike",
+            "type": "u64"
+          },
+          {
+            "name": "expiry",
+            "type": "i64"
+          },
+          {
+            "name": "lp_tokens",
+            "docs": [
+              "LP tokens to burn"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "min_usdc_out",
+            "docs": [
+              "Minimum USDC to receive (slippage protection), 6 dec"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SellOptionArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_discriminant",
+            "type": "u8"
+          },
+          {
+            "name": "option_type",
+            "type": "u8"
+          },
+          {
+            "name": "strike",
+            "type": "u64"
+          },
+          {
+            "name": "expiry",
+            "type": "i64"
+          },
+          {
+            "name": "size",
+            "docs": [
+              "Size to sell back (may be partial), 6 dec underlying units"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "min_proceeds",
+            "docs": [
+              "Minimum USDC to receive (slippage guard), 6 dec"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SettleExpiredArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_discriminant",
+            "type": "u8"
+          },
+          {
+            "name": "option_type",
+            "type": "u8"
+          },
+          {
+            "name": "strike",
+            "type": "u64"
+          },
+          {
+            "name": "expiry",
+            "type": "i64"
+          },
+          {
+            "name": "settlement_price",
+            "docs": [
+              "Settlement price provided by keeper (verified against oracle)"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UpdateIVParamsArgsExt",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_discriminant",
+            "type": "u8"
+          },
+          {
+            "name": "iv_atm",
+            "type": "u64"
+          },
+          {
+            "name": "iv_skew_rho",
+            "type": "i64"
+          },
+          {
+            "name": "iv_curvature_phi",
+            "type": "u64"
+          },
+          {
+            "name": "theta_param",
+            "type": "u64"
+          },
+          {
+            "name": "latest_price",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -11,6 +11,7 @@ iv_engine/.env
 !frontend/tsconfig.json
 !package-lock.json
 !frontend/package-lock.json
+!frontend/src/lib/pacifica_options_idl.json
 
 # Rust / Anchor
 target/
