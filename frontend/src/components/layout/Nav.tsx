@@ -2,6 +2,7 @@
 import React from 'react';
 import Image from 'next/image';
 import { ConnectButton } from '@/components/ui/ConnectButton';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 
 export type View = 'trade' | 'portfolio' | 'lp' | 'leaderboard' | 'analytics';
 
@@ -10,43 +11,60 @@ interface NavProps {
   setView: (v: View) => void;
 }
 
-const TABS: { id: View; label: string }[] = [
-  { id: 'trade',       label: 'Trade'       },
-  { id: 'portfolio',   label: 'Portfolio'   },
-  { id: 'lp',          label: 'LP Vault'    },
-  { id: 'leaderboard', label: 'Leaderboard' },
-  { id: 'analytics',   label: 'Analytics'   },
+const TABS: { id: View; label: string; short: string }[] = [
+  { id: 'trade',       label: 'Trade',       short: 'Trade'  },
+  { id: 'portfolio',   label: 'Portfolio',   short: 'Port.'  },
+  { id: 'lp',          label: 'LP Vault',    short: 'LP'     },
+  { id: 'leaderboard', label: 'Leaderboard', short: 'Board'  },
+  { id: 'analytics',   label: 'Analytics',   short: 'Stats'  },
 ];
 
 export const Nav = React.memo(function Nav({ view, setView }: NavProps) {
+  const { isMobile } = useBreakpoint();
+
   return (
     <nav style={{
-      height: 52,
+      height: isMobile ? 48 : 52,
       background: 'var(--bg1)',
       borderBottom: '1px solid var(--border)',
       display: 'flex',
       alignItems: 'center',
-      padding: '0 20px',
+      padding: isMobile ? '0 10px' : '0 20px',
       gap: 0,
       flexShrink: 0,
       zIndex: 10,
     }}>
-      {/* Logo + name */}
+      {/* Logo */}
       <div
         onClick={() => setView('trade')}
         style={{
-          display: 'flex', alignItems: 'center', gap: 9,
-          cursor: 'pointer', marginRight: 28, flexShrink: 0,
+          display: 'flex', alignItems: 'center', gap: isMobile ? 6 : 9,
+          cursor: 'pointer', marginRight: isMobile ? 8 : 28, flexShrink: 0,
         }}
       >
-        <Image src="/logo.svg" alt="Abyssal" width={32} height={32} style={{ borderRadius: '50%' }} />
-        <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: '-0.02em', color: 'var(--text)' }}>
-          Abyssal<span style={{ color: 'var(--cyan)' }}>.fi</span>
-        </span>
+        <Image
+          src="/logo.svg"
+          alt="Abyssal"
+          width={isMobile ? 26 : 32}
+          height={isMobile ? 26 : 32}
+          style={{ borderRadius: '50%' }}
+        />
+        {!isMobile && (
+          <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: '-0.02em', color: 'var(--text)' }}>
+            Abyssal<span style={{ color: 'var(--cyan)' }}>.fi</span>
+          </span>
+        )}
       </div>
 
-      {/* Nav tabs */}
-      <div style={{ display: 'flex', alignItems: 'stretch', height: '100%', gap: 2, flex: 1 }}>
+      {/* Nav tabs — horizontally scrollable on mobile */}
+      <div
+        className="hide-scrollbar"
+        style={{
+          display: 'flex', alignItems: 'stretch', height: '100%',
+          gap: 0, flex: 1,
+          overflowX: 'auto',
+        }}
+      >
         {TABS.map(tab => {
           const active = view === tab.id;
           return (
@@ -55,28 +73,28 @@ export const Nav = React.memo(function Nav({ view, setView }: NavProps) {
               onClick={() => setView(tab.id)}
               style={{
                 position: 'relative',
-                padding: '0 16px',
+                padding: isMobile ? '0 10px' : '0 16px',
                 border: 'none',
                 background: 'transparent',
                 color: active ? 'var(--text)' : 'var(--text3)',
-                fontSize: 13,
+                fontSize: isMobile ? 12 : 13,
                 fontWeight: active ? 600 : 400,
                 cursor: 'pointer',
                 letterSpacing: active ? '-0.01em' : '0',
                 transition: 'color 0.12s',
                 whiteSpace: 'nowrap',
+                flexShrink: 0,
               }}
               onMouseEnter={e => { if (!active) e.currentTarget.style.color = 'var(--text2)'; }}
               onMouseLeave={e => { if (!active) e.currentTarget.style.color = 'var(--text3)'; }}
             >
-              {tab.label}
-              {/* Active underline */}
+              {isMobile ? tab.short : tab.label}
               {active && (
                 <span style={{
                   position: 'absolute',
                   bottom: 0,
-                  left: 8,
-                  right: 8,
+                  left: isMobile ? 4 : 8,
+                  right: isMobile ? 4 : 8,
                   height: 2,
                   background: 'var(--cyan)',
                   borderRadius: '2px 2px 0 0',

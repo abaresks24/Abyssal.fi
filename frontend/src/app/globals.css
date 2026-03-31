@@ -26,6 +26,7 @@
 
 html, body {
   height: 100%;
+  height: 100dvh;
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
@@ -86,4 +87,28 @@ input { background: transparent; color: var(--text); font-family: var(--font); }
 @keyframes spin {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
+}
+
+/* ── Responsive utilities ──────────────────────────────────────────────────── */
+
+/* Hide scrollbar but keep scroll functionality */
+.hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Horizontal scroll wrapper for tables on small screens */
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table-scroll::-webkit-scrollbar { height: 3px; }
+
+/* Responsive flex cards — wrap on mobile */
+@media (max-width: 767px) {
+  .cards-row { flex-wrap: wrap !important; }
+  .cards-row > * { min-width: calc(50% - 6px) !important; flex: 1 1 calc(50% - 6px) !important; }
+  .page-pad { padding: 16px !important; }
+  .page-gap { gap: 12px !important; }
+  .hide-mobile { display: none !important; }
+  h2.page-title { font-size: 18px !important; }
+}
+
+@media (max-width: 480px) {
+  .cards-row > * { min-width: 100% !important; flex: 1 1 100% !important; }
 }

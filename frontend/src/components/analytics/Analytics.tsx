@@ -2,6 +2,7 @@
 import React from 'react';
 import { useVaultStats } from '@/hooks/useVaultStats';
 import { usePacificaWS } from '@/hooks/usePacificaWS';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import type { Market } from '@/types';
 
 const MARKETS: Market[] = ['BTC', 'ETH', 'SOL'];
@@ -14,11 +15,10 @@ function StatRow({ label, value, accent }: { label: string; value: string; accen
   return (
     <div style={{
       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      padding: '10px 0',
-      borderBottom: '1px solid var(--border)',
+      padding: '10px 0', borderBottom: '1px solid var(--border)',
     }}>
       <span style={{ fontSize: 12, color: 'var(--text2)' }}>{label}</span>
-      <span style={{ fontSize: 12, fontFamily: 'var(--mono)', fontWeight: 600, color: accent ?? 'var(--text)' }}>{value}</span>
+      <span style={{ fontSize: 12, fontFamily: 'var(--mono)', color: accent ?? 'var(--text)' }}>{value}</span>
     </div>
   );
 }
@@ -27,17 +27,12 @@ function MarketCard({ market }: { market: Market }) {
   const { price, change24h, fundingRate } = usePacificaWS(market);
   const isPos = change24h >= 0;
 
-  const fmtPrice = market === 'SOL'
-    ? `$${fmt(price, 2)}`
-    : `$${fmt(price, 0)}`;
+  const fmtPrice = market === 'SOL' ? `$${fmt(price, 2)}` : `$${fmt(price, 0)}`;
 
   return (
     <div style={{
-      background: 'var(--bg2)',
-      border: '1px solid var(--border)',
-      borderRadius: 8,
-      padding: '18px 20px',
-      flex: 1,
+      background: 'var(--bg2)', border: '1px solid var(--border)',
+      borderRadius: 8, padding: '18px 20px', flex: 1, minWidth: 0,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <span style={{ fontSize: 15, fontWeight: 700 }}>{market}-PERP</span>
@@ -49,12 +44,10 @@ function MarketCard({ market }: { market: Market }) {
           {isPos ? '+' : ''}{change24h.toFixed(2)}%
         </span>
       </div>
-
-      <div style={{ fontSize: 26, fontWeight: 700, fontFamily: 'var(--mono)', marginBottom: 16, color: 'var(--text)' }}>
+      <div style={{ fontSize: 26, fontFamily: 'var(--mono)', marginBottom: 16, color: 'var(--text)' }}>
         {price > 0 ? fmtPrice : <span className="skeleton" style={{ width: 120, height: 24, display: 'inline-block' }} />}
       </div>
-
-      <StatRow label="24h Volume" value={price > 0 ? '—' : '—'} />
+      <StatRow label="24h Volume" value="—" />
       <StatRow
         label="Funding Rate"
         value={price > 0 ? `${(fundingRate * 100).toFixed(4)}%` : '—'}
@@ -70,7 +63,7 @@ function IVGauge({ label, iv, color }: { label: string; iv: number; color: strin
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
         <span style={{ color: 'var(--text2)' }}>{label}</span>
-        <span style={{ fontFamily: 'var(--mono)', fontWeight: 600, color }}>{(iv * 100).toFixed(1)}%</span>
+        <span style={{ fontFamily: 'var(--mono)', color }}>{(iv * 100).toFixed(1)}%</span>
       </div>
       <div style={{ height: 6, background: 'var(--bg3)', borderRadius: 3, overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 3, transition: 'width 0.4s' }} />
@@ -81,11 +74,12 @@ function IVGauge({ label, iv, color }: { label: string; iv: number; color: strin
 
 export function Analytics() {
   const stats = useVaultStats();
+  const { isMobile } = useBreakpoint();
+
   const utilization = stats.totalCollateral > 0
     ? (stats.openInterest / stats.totalCollateral) * 100
     : 0;
 
-  // Mock IV surface data (will come from IVOracle when pools are live)
   const ivData: Record<Market, { atm: number; skew: number }> = {
     BTC:      { atm: 0.62, skew: -0.08 },
     ETH:      { atm: 0.74, skew: -0.11 },
@@ -104,40 +98,41 @@ export function Analytics() {
     COPPER:   { atm: 0.31, skew: -0.05 },
   };
 
+  const pad = isMobile ? '16px' : '24px 28px';
+  const gap = isMobile ? 14 : 20;
+
   return (
     <div style={{
-      height: '100%',
-      overflowY: 'auto',
-      background: 'var(--bg)',
-      padding: '24px 28px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 20,
+      height: '100%', overflowY: 'auto', background: 'var(--bg)',
+      padding: pad, display: 'flex', flexDirection: 'column', gap,
     }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>Analytics</h2>
+        <h2 style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, letterSpacing: '-0.02em' }}>Analytics</h2>
         <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>
-          AFVR IV Model · Black-Scholes pricing
-        </span>
+        {!isMobile && (
+          <span style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>
+            AFVR IV Model · Black-Scholes pricing
+          </span>
+        )}
       </div>
 
-      {/* Market data */}
-      <div style={{ display: 'flex', gap: 12 }}>
+      {/* Market cards — wrap on mobile */}
+      <div className="cards-row" style={{ display: 'flex', gap: 12 }}>
         {MARKETS.map(m => <MarketCard key={m} market={m} />)}
       </div>
 
-      <div style={{ display: 'flex', gap: 16 }}>
+      {/* Panels — stack on mobile */}
+      <div style={{
+        display: 'flex', gap: 16,
+        flexDirection: isMobile ? 'column' : 'row',
+      }}>
 
         {/* Protocol stats */}
         <div style={{
-          flex: 1,
-          background: 'var(--bg2)',
-          border: '1px solid var(--border)',
-          borderRadius: 8,
-          padding: '18px 20px',
+          flex: 1, background: 'var(--bg2)',
+          border: '1px solid var(--border)', borderRadius: 8, padding: '18px 20px',
         }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--text)' }}>
             Protocol Stats
@@ -163,17 +158,13 @@ export function Analytics() {
 
         {/* IV Surface */}
         <div style={{
-          flex: 1,
-          background: 'var(--bg2)',
-          border: '1px solid var(--border)',
-          borderRadius: 8,
-          padding: '18px 20px',
+          flex: 1, background: 'var(--bg2)',
+          border: '1px solid var(--border)', borderRadius: 8, padding: '18px 20px',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>IV Surface (ATM)</span>
-            <span style={{ fontSize: 11, color: 'var(--text3)' }}>AFVR model · from oracle</span>
+            <span style={{ fontSize: 11, color: 'var(--text3)' }}>AFVR · oracle</span>
           </div>
-
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {(['BTC', 'ETH', 'SOL', 'NVDA', 'TSLA', 'XAU', 'SP500'] as Market[]).map(m => {
               const color = ivData[m].atm > 0.8 ? 'var(--red)' : ivData[m].atm > 0.5 ? 'var(--amber)' : 'var(--cyan)';
@@ -182,27 +173,19 @@ export function Analytics() {
           </div>
         </div>
 
-        {/* IV Skew table */}
+        {/* IV Skew table — horizontal scroll on mobile */}
         <div style={{
-          flex: 1,
-          background: 'var(--bg2)',
-          border: '1px solid var(--border)',
-          borderRadius: 8,
-          padding: '18px 20px',
+          flex: 1, background: 'var(--bg2)',
+          border: '1px solid var(--border)', borderRadius: 8, padding: '18px 20px',
         }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--text)' }}>
             IV Skew (25Δ Put - Call)
           </div>
           <div style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 80px 80px',
-            fontSize: 11,
-            color: 'var(--text3)',
-            padding: '6px 0',
-            borderBottom: '1px solid var(--border)',
-            marginBottom: 8,
-            textTransform: 'uppercase',
-            letterSpacing: '0.06em',
+            display: 'grid', gridTemplateColumns: '1fr 80px 80px',
+            fontSize: 11, color: 'var(--text3)',
+            padding: '6px 0', borderBottom: '1px solid var(--border)',
+            marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em',
           }}>
             <span>Market</span>
             <span style={{ textAlign: 'right' }}>ATM IV</span>
@@ -210,11 +193,8 @@ export function Analytics() {
           </div>
           {(['BTC', 'ETH', 'SOL', 'NVDA', 'TSLA', 'PLTR', 'XAU', 'XAG', 'NATGAS'] as Market[]).map(m => (
             <div key={m} style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 80px 80px',
-              padding: '8px 0',
-              borderBottom: '1px solid var(--border)',
-              fontSize: 12,
+              display: 'grid', gridTemplateColumns: '1fr 80px 80px',
+              padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 12,
             }}>
               <span style={{ fontWeight: 600 }}>{m}</span>
               <span className="mono" style={{ textAlign: 'right' }}>{(ivData[m].atm * 100).toFixed(1)}%</span>

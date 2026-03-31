@@ -5,6 +5,7 @@ import { PublicKey } from '@solana/web3.js';
 import { useVaultStats } from '@/hooks/useVaultStats';
 import { PacificaOptionsClient } from '@/lib/anchor_client';
 import { VAULT_AUTHORITY } from '@/lib/constants';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 
 const SCALE = 1_000_000;
 
@@ -37,6 +38,7 @@ function StatCard({ label, value, sub, accent }: {
 export function LPVault() {
   const wallet = useWallet();
   const stats = useVaultStats();
+  const { isMobile } = useBreakpoint();
 
   const [tab, setTab] = useState<'deposit' | 'withdraw'>('deposit');
   const [amount, setAmount] = useState('');
@@ -127,32 +129,37 @@ export function LPVault() {
     }
   })();
 
+  const pad = isMobile ? '16px' : '24px 28px';
+  const gap = isMobile ? 14 : 20;
+
   return (
     <div style={{
       height: '100%',
       overflowY: 'auto',
       background: 'var(--bg)',
-      padding: '24px 28px',
+      padding: pad,
       display: 'flex',
       flexDirection: 'column',
-      gap: 20,
+      gap,
     }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>LP Vault</h2>
+        <h2 style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, letterSpacing: '-0.02em' }}>LP Vault</h2>
         <div style={{ flex: 1 }} />
-        <div style={{
-          fontSize: 11, padding: '3px 10px', borderRadius: 4,
-          background: 'rgba(85,195,233,0.12)', color: 'var(--cyan)',
-          border: '1px solid rgba(85,195,233,0.25)', fontWeight: 600,
-        }}>
-          vLP — Global Vault Shares
-        </div>
+        {!isMobile && (
+          <div style={{
+            fontSize: 11, padding: '3px 10px', borderRadius: 4,
+            background: 'rgba(85,195,233,0.12)', color: 'var(--cyan)',
+            border: '1px solid rgba(85,195,233,0.25)', fontWeight: 600,
+          }}>
+            vLP — Global Vault Shares
+          </div>
+        )}
       </div>
 
       {/* Protocol stats */}
-      <div style={{ display: 'flex', gap: 12 }}>
+      <div className="cards-row" style={{ display: 'flex', gap: 12 }}>
         <StatCard
           label="Total Value Locked"
           value={stats.loading ? '—' : `$${fmt(totalCollateral)}`}
@@ -178,7 +185,7 @@ export function LPVault() {
         />
       </div>
 
-      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexDirection: isMobile ? 'column' : 'row' }}>
 
         {/* Deposit / Withdraw form */}
         <div style={{
@@ -332,7 +339,7 @@ export function LPVault() {
         </div>
 
         {/* Right column: position + explainer */}
-        <div style={{ width: 300, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ width: isMobile ? '100%' : 300, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
 
           {/* User position */}
           <div style={{
