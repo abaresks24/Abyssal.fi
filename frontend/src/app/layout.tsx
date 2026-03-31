@@ -20,6 +20,7 @@ const ibmPlexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: 'Abyssal.fi — Decentralized Options on Solana',
   description: 'Trade European options on BTC, ETH and SOL perps. Cash-settled in USDC.',
+  icons: { icon: '/logo.svg' },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

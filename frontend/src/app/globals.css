@@ -41,7 +41,11 @@ html, body {
 .mono, [data-mono] {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
+  font-weight: 400;
 }
+
+/* Prevent inline fontWeight: 700/600 from bolding mono numbers */
+[style*="var(--mono)"] { font-weight: 400 !important; }
 
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
