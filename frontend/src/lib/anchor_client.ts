@@ -109,6 +109,13 @@ export function findLPPositionPDA(owner: PublicKey, pool: PublicKey): [PublicKey
   );
 }
 
+export function findVaultLPPositionPDA(owner: PublicKey, vault: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from('vault_lp_position'), owner.toBuffer(), vault.toBuffer()],
+    PROGRAM_PUBKEY,
+  );
+}
+
 // ── Client ────────────────────────────────────────────────────────────────────
 
 export class PacificaOptionsClient {
@@ -517,6 +524,79 @@ export class PacificaOptionsClient {
         lpPosition,
         providerUsdc,
         provider,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      } as any)
+      .rpc();
+  }
+
+  // ── Global Vault LP ─────────────────────────────────────────────────────────
+
+  async getVaultLPPosition(vaultAuthority: PublicKey) {
+    if (!this.wallet.publicKey) return null;
+    const [vault] = findVaultPDA(vaultAuthority);
+    const [vlpPosition] = findVaultLPPositionPDA(this.wallet.publicKey, vault);
+    try {
+      return await this.program.account.vaultLpPosition.fetch(vlpPosition);
+    } catch {
+      return null;
+    }
+  }
+
+  async depositVault(params: {
+    vaultAuthority: PublicKey;
+    usdcAmount: number;
+    minVlpTokens?: number;
+  }): Promise<string> {
+    if (!this.wallet.publicKey) throw new Error('Wallet not connected');
+    const depositor = this.wallet.publicKey;
+
+    const [vault]      = findVaultPDA(params.vaultAuthority);
+    const [usdcVault]  = findVaultUsdcPDA(vault);
+    const [vlpPosition] = findVaultLPPositionPDA(depositor, vault);
+    const depositorUsdc = await getAssociatedTokenAddress(USDC_MINT_PUBKEY, depositor);
+
+    return await this.program.methods
+      .depositVault({
+        usdcAmount: new BN(Math.round(params.usdcAmount * SCALE)),
+        minVlpTokens: new BN(Math.round((params.minVlpTokens ?? 0) * SCALE)),
+      })
+      .accounts({
+        vault,
+        usdcVault,
+        vlpPosition,
+        depositorUsdc,
+        depositor,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        rent: SYSVAR_RENT_PUBKEY,
+      } as any)
+      .rpc();
+  }
+
+  async withdrawVault(params: {
+    vaultAuthority: PublicKey;
+    vlpTokens: number;
+    minUsdcOut?: number;
+  }): Promise<string> {
+    if (!this.wallet.publicKey) throw new Error('Wallet not connected');
+    const withdrawer = this.wallet.publicKey;
+
+    const [vault]       = findVaultPDA(params.vaultAuthority);
+    const [usdcVault]   = findVaultUsdcPDA(vault);
+    const [vlpPosition] = findVaultLPPositionPDA(withdrawer, vault);
+    const withdrawerUsdc = await getAssociatedTokenAddress(USDC_MINT_PUBKEY, withdrawer);
+
+    return await this.program.methods
+      .withdrawVault({
+        vlpTokens: new BN(Math.round(params.vlpTokens * SCALE)),
+        minUsdcOut: new BN(Math.round((params.minUsdcOut ?? 0) * SCALE)),
+      })
+      .accounts({
+        vault,
+        usdcVault,
+        vlpPosition,
+        withdrawerUsdc,
+        withdrawer,
         tokenProgram: TOKEN_PROGRAM_ID,
       } as any)
       .rpc();

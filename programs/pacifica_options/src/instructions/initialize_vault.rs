@@ -62,7 +62,8 @@ pub fn handler(ctx: Context<InitializeVault>) -> Result<()> {
     vault.last_iv_update = clock.unix_timestamp;
     vault.fees_collected = 0;
     vault.paused = false;
-    vault._padding = [0u8; 64];
+    vault.total_vlp_tokens = 0;
+    vault._padding = [0u8; 56];
 
     msg!(
         "PacificaOptions vault initialized. Authority: {}, Keeper: {}",

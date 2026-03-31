@@ -79,8 +79,12 @@ pub struct OptionVault {
     /// Whether the protocol is halted
     pub paused: bool,
 
+    /// Total vLP tokens in circulation (global vault LP shares)
+    /// Stored in the first 8 bytes of the former _padding field
+    pub total_vlp_tokens: u64,
+
     /// Reserved space for future fields
-    pub _padding: [u8; 64],
+    pub _padding: [u8; 56],
 }
 
 impl OptionVault {
@@ -97,5 +101,6 @@ impl OptionVault {
         + 8   // last_iv_update
         + 8   // fees_collected
         + 1   // paused
-        + 64; // padding
+        + 8   // total_vlp_tokens
+        + 56; // padding
 }

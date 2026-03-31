@@ -14,6 +14,7 @@ use instructions::settle_expired::*;
 use instructions::rebalance_delta::*;
 use instructions::add_liquidity::*;
 use instructions::remove_liquidity::*;
+use instructions::vault_liquidity::*;
 
 declare_id!("CBkvR8SeN6j8RQKB7dSxG3dza2v71XHmWEe8LgfMW1hG");
 
@@ -121,5 +122,17 @@ pub mod pacifica_options {
         args: RemoveLiquidityArgs,
     ) -> Result<()> {
         instructions::remove_liquidity::handler(ctx, args)
+    }
+
+    // ── Global Vault LP ───────────────────────────────────────────────────────
+
+    /// Deposit USDC into the global vault and receive vLP tokens
+    pub fn deposit_vault(ctx: Context<DepositVault>, args: DepositVaultArgs) -> Result<()> {
+        instructions::vault_liquidity::deposit_vault(ctx, args)
+    }
+
+    /// Burn vLP tokens and withdraw proportional USDC from the global vault
+    pub fn withdraw_vault(ctx: Context<WithdrawVault>, args: WithdrawVaultArgs) -> Result<()> {
+        instructions::vault_liquidity::withdraw_vault(ctx, args)
     }
 }

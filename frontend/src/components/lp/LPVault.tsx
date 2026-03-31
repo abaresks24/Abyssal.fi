@@ -1,122 +1,131 @@
 'use client';
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey } from '@solana/web3.js';
-import { PacificaOptionsClient } from '@/lib/anchor_client';
 import { useVaultStats } from '@/hooks/useVaultStats';
-import { usePacificaWS } from '@/hooks/usePacificaWS';
-import { VAULT_AUTHORITY, SCALE, computeStrikes, EXPIRY_OPTIONS, expiryToDate } from '@/lib/constants';
-import type { Market, OptionType, Expiry } from '@/types';
+import { PacificaOptionsClient } from '@/lib/anchor_client';
+import { VAULT_AUTHORITY } from '@/lib/constants';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+const SCALE = 1_000_000;
 
-function fmt(n: number, decimals = 2) {
-  return n.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+function fmt(n: number, d = 2) {
+  return n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
 }
 
-function StatCard({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: string }) {
+function StatCard({ label, value, sub, accent }: {
+  label: string; value: string; sub?: string; accent?: string;
+}) {
   return (
     <div style={{
       flex: 1,
       background: 'var(--bg2)',
       border: '1px solid var(--border)',
       borderRadius: 8,
-      padding: '14px 18px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 4,
+      padding: '16px 20px',
     }}>
-      <span style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
-      <span style={{ fontSize: 20, fontWeight: 700, fontFamily: 'var(--mono)', color: accent ?? 'var(--text)' }}>{value}</span>
-      {sub && <span style={{ fontSize: 11, color: 'var(--text3)' }}>{sub}</span>}
+      <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 22, fontWeight: 700, fontFamily: 'var(--mono)', color: accent ?? 'var(--text)' }}>
+        {value}
+      </div>
+      {sub && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>{sub}</div>}
     </div>
   );
 }
 
-type Tab = 'deposit' | 'withdraw';
-const MARKETS: Market[] = ['BTC', 'ETH', 'SOL'];
-const OPTION_TYPES: OptionType[] = ['Call', 'Put'];
-
-// ── Main component ────────────────────────────────────────────────────────────
-
 export function LPVault() {
   const wallet = useWallet();
-  const stats  = useVaultStats();
+  const stats = useVaultStats();
 
-  const [tab,       setTab]       = useState<Tab>('deposit');
-  const [market,    setMarket]    = useState<Market>('BTC');
-  const [optType,   setOptType]   = useState<OptionType>('Call');
-  const [expiry,    setExpiry]    = useState<Expiry>('7D');
-  const [strikeIdx, setStrikeIdx] = useState(2); // ATM default
-  const [amount,    setAmount]    = useState('');
-  const [status,    setStatus]    = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
-  const [txMsg,     setTxMsg]     = useState('');
+  const [tab, setTab] = useState<'deposit' | 'withdraw'>('deposit');
+  const [amount, setAmount] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [txSig, setTxSig] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
-  const { price: spot } = usePacificaWS(market);
-  const strikes = spot > 0 ? computeStrikes(spot) : [];
-  const strike  = strikes[strikeIdx] ?? 0;
+  // User's vLP position
+  const [vlpTokens, setVlpTokens] = useState(0);
+  const [usdcDeposited, setUsdcDeposited] = useState(0);
+  const [posLoading, setPosLoading] = useState(false);
 
-  const utilization = stats.totalCollateral > 0
-    ? (stats.openInterest / stats.totalCollateral) * 100
+  const totalCollateral = stats.totalCollateral;
+  const totalVlpTokens  = stats.totalVlpTokens;
+
+  // vLP price = total_collateral / total_vlp_tokens (USDC per vLP)
+  const vlpPrice = totalVlpTokens > 0 ? totalCollateral / totalVlpTokens : 1;
+  const userValueUsdc = vlpTokens * vlpPrice;
+  const unrealizedPnl = userValueUsdc - usdcDeposited;
+  const utilization = totalCollateral > 0
+    ? (stats.openInterest / totalCollateral) * 100
     : 0;
 
-  const handleSubmit = useCallback(async () => {
-    if (!wallet.publicKey || !wallet.connected) {
-      setTxMsg('Connect your wallet first'); setStatus('error'); return;
-    }
-    const usdcAmt = parseFloat(amount);
-    if (!usdcAmt || usdcAmt <= 0) {
-      setTxMsg('Enter a valid amount'); setStatus('error'); return;
-    }
-    if (strike === 0) {
-      setTxMsg('Waiting for price feed…'); setStatus('error'); return;
-    }
-
-    setStatus('pending');
-    setTxMsg('');
-
+  const fetchPosition = useCallback(async () => {
+    if (!wallet.publicKey) { setVlpTokens(0); setUsdcDeposited(0); return; }
+    setPosLoading(true);
     try {
-      const client    = new PacificaOptionsClient(wallet as never);
+      const client = new PacificaOptionsClient(wallet);
       const authority = new PublicKey(VAULT_AUTHORITY);
-      const expiryTs  = Math.floor(expiryToDate(expiry).getTime() / 1000);
+      const pos = await client.getVaultLPPosition(authority);
+      if (pos) {
+        setVlpTokens((pos.vlpTokens as any).toNumber() / SCALE);
+        setUsdcDeposited((pos.usdcDeposited as any).toNumber() / SCALE);
+      } else {
+        setVlpTokens(0);
+        setUsdcDeposited(0);
+      }
+    } catch {
+      setVlpTokens(0);
+      setUsdcDeposited(0);
+    } finally {
+      setPosLoading(false);
+    }
+  }, [wallet]);
+
+  useEffect(() => { fetchPosition(); }, [fetchPosition]);
+
+  const handleSubmit = async () => {
+    if (!wallet.publicKey || !amount) return;
+    const val = parseFloat(amount);
+    if (isNaN(val) || val <= 0) { setErr('Enter a valid amount'); return; }
+
+    setLoading(true);
+    setErr(null);
+    setTxSig(null);
+    try {
+      const client    = new PacificaOptionsClient(wallet);
+      const authority = new PublicKey(VAULT_AUTHORITY);
 
       let sig: string;
       if (tab === 'deposit') {
-        sig = await client.addLiquidity({
-          vaultAuthority: authority,
-          market,
-          optionType: optType,
-          strikeUsdc: strike,
-          expiry: expiryTs,
-          usdcAmount: usdcAmt,
-          minLpTokens: 0,
-        });
+        sig = await client.depositVault({ vaultAuthority: authority, usdcAmount: val });
       } else {
-        sig = await client.removeLiquidity({
-          vaultAuthority: authority,
-          market,
-          optionType: optType,
-          strikeUsdc: strike,
-          expiry: expiryTs,
-          lpTokens: usdcAmt,
-          minUsdcOut: 0,
-        });
+        // Convert USDC value to vLP tokens to burn
+        const vlpToWithdraw = vlpPrice > 0 ? val / vlpPrice : 0;
+        sig = await client.withdrawVault({ vaultAuthority: authority, vlpTokens: vlpToWithdraw });
       }
-      setStatus('success');
-      setTxMsg(`Tx confirmed: ${sig.slice(0, 16)}…`);
+      setTxSig(sig);
       setAmount('');
-    } catch (e) {
-      setStatus('error');
-      const msg = String(e);
-      if (msg.includes('AccountNotFound') || msg.includes('does not exist')) {
-        setTxMsg('AMM pool not initialized for this series. Select a different strike/expiry or wait for pool initialization.');
-      } else {
-        setTxMsg(msg.length > 120 ? msg.slice(0, 120) + '…' : msg);
-      }
+      await fetchPosition();
+    } catch (e: any) {
+      setErr(e?.message ?? 'Transaction failed');
+    } finally {
+      setLoading(false);
     }
-  }, [wallet, amount, tab, market, optType, strike, expiry]);
+  };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // Preview for deposit/withdraw
+  const previewVlp = (() => {
+    const val = parseFloat(amount);
+    if (isNaN(val) || val <= 0) return null;
+    if (tab === 'deposit') {
+      return totalVlpTokens > 0 && totalCollateral > 0
+        ? (val * totalVlpTokens) / totalCollateral
+        : val;
+    } else {
+      return vlpPrice > 0 ? val / vlpPrice : 0;
+    }
+  })();
 
   return (
     <div style={{
@@ -129,343 +138,272 @@ export function LPVault() {
       gap: 20,
     }}>
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text)' }}>
-          LP Vault
-        </h2>
-        <span style={{
-          fontSize: 11, fontWeight: 600, padding: '3px 10px',
-          borderRadius: 20, letterSpacing: '0.04em',
-          background: stats.paused ? 'var(--red-dim)' : 'var(--green-dim)',
-          color: stats.paused ? 'var(--red)' : 'var(--green)',
-          border: `1px solid ${stats.paused ? 'rgba(235,54,90,0.25)' : 'rgba(2,199,123,0.25)'}`,
-        }}>
-          {stats.loading ? '…' : stats.paused ? 'PAUSED' : 'ACTIVE'}
-        </span>
+        <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>LP Vault</h2>
         <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>
-          Devnet · European options · USDC-settled
-        </span>
+        <div style={{
+          fontSize: 11, padding: '3px 10px', borderRadius: 4,
+          background: 'rgba(85,195,233,0.12)', color: 'var(--cyan)',
+          border: '1px solid rgba(85,195,233,0.25)', fontWeight: 600,
+        }}>
+          vLP — Global Vault Shares
+        </div>
       </div>
 
-      {/* ── Stats row ──────────────────────────────────────────────────────── */}
+      {/* Protocol stats */}
       <div style={{ display: 'flex', gap: 12 }}>
         <StatCard
           label="Total Value Locked"
-          value={stats.loading ? '—' : `$${fmt(stats.totalCollateral)}`}
+          value={stats.loading ? '—' : `$${fmt(totalCollateral)}`}
           sub="USDC in vault"
         />
         <StatCard
-          label="Open Interest"
-          value={stats.loading ? '—' : `$${fmt(stats.openInterest)}`}
-          sub="Options outstanding"
+          label="vLP Token Price"
+          value={stats.loading ? '—' : `$${fmt(vlpPrice, 4)}`}
+          sub="USDC per vLP"
+          accent="var(--cyan)"
         />
         <StatCard
           label="Utilization"
           value={stats.loading ? '—' : `${fmt(utilization, 1)}%`}
-          sub="OI / TVL"
-          accent={utilization > 80 ? 'var(--amber)' : utilization > 50 ? 'var(--cyan)' : undefined}
+          sub="Open interest / TVL"
+          accent={utilization > 80 ? 'var(--amber)' : undefined}
         />
         <StatCard
-          label="Fees Earned"
+          label="Fees Collected"
           value={stats.loading ? '—' : `$${fmt(stats.feesCollected)}`}
-          sub="Cumulative protocol fees"
+          sub="Cumulative"
           accent="var(--green)"
-        />
-        <StatCard
-          label="Net Delta"
-          value={stats.loading ? '—' : fmt(stats.deltaNet, 4)}
-          sub="Δ across all series"
-          accent={Math.abs(stats.deltaNet) > 0.1 ? 'var(--amber)' : undefined}
         />
       </div>
 
-      {/* ── Body ───────────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
+      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
 
-        {/* ── Left: explanation + architecture ─────────────────────────────── */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-          {/* Model explanation */}
-          <div style={{
-            background: 'var(--bg2)',
-            border: '1px solid var(--border)',
-            borderRadius: 8,
-            padding: '18px 20px',
-          }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--text)' }}>
-              How LP works on Abyssal
-            </div>
-            {[
-              ['AMM Counterparty', 'The vault acts as sole counterparty for all option buyers and sellers via constant-product AMM pools.'],
-              ['Per-Series Pools', 'Each (market × option type × strike × expiry) has its own AMM pool. LP tokens are minted proportionally to liquidity provided.'],
-              ['Premium Yield', 'LPs earn 100% of premiums collected minus hedging costs. Delta exposure is continuously hedged via Pacifica perpetuals.'],
-              ['Risk', 'LPs bear residual delta and vega risk. Unhedged net delta appears in the stats above. Maximum loss per pool is bounded by pool TVL.'],
-            ].map(([title, body]) => (
-              <div key={title} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--cyan)', marginBottom: 3 }}>{title}</div>
-                <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.6 }}>{body}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Pool status */}
-          <div style={{
-            background: 'var(--bg2)',
-            border: '1px solid var(--border)',
-            borderRadius: 8,
-            padding: '18px 20px',
-          }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--text)' }}>
-              Active Pools
-            </div>
-            <div style={{
-              padding: '20px 0',
-              textAlign: 'center',
-              color: 'var(--text3)',
-              fontSize: 12,
-              lineHeight: 1.8,
-            }}>
-              <div style={{ fontSize: 28, marginBottom: 8 }}>○</div>
-              No AMM pools initialized yet
-              <br />
-              <span style={{ color: 'var(--text3)', fontSize: 11 }}>
-                Pool initialization is done by the vault authority per option series.<br />
-                Pools become available when trading begins for a given series.
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Right: deposit / withdraw form ───────────────────────────────── */}
+        {/* Deposit / Withdraw form */}
         <div style={{
-          width: 360,
+          flex: 1,
           background: 'var(--bg2)',
           border: '1px solid var(--border)',
           borderRadius: 8,
-          padding: '20px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 16,
-          flexShrink: 0,
-          height: 'fit-content',
+          padding: '20px 24px',
         }}>
-
-          {/* Tabs */}
+          {/* Tab switch */}
           <div style={{
-            display: 'flex',
-            background: 'var(--bg)',
-            border: '1px solid var(--border)',
-            borderRadius: 6,
-            padding: 3,
-            gap: 3,
+            display: 'flex', gap: 0, marginBottom: 20,
+            borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)',
           }}>
-            {(['deposit', 'withdraw'] as Tab[]).map(t => (
-              <button key={t}
-                onClick={() => { setTab(t); setStatus('idle'); setTxMsg(''); }}
+            {(['deposit', 'withdraw'] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => { setTab(t); setErr(null); setTxSig(null); }}
                 style={{
-                  flex: 1, padding: '7px 0', border: 'none', borderRadius: 4,
-                  fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                  background: tab === t ? 'var(--bg2)' : 'transparent',
-                  color: tab === t ? 'var(--text)' : 'var(--text3)',
-                  transition: 'all 0.15s',
+                  flex: 1, padding: '8px 0', border: 'none', cursor: 'pointer',
+                  fontSize: 13, fontWeight: 600,
+                  background: tab === t ? 'var(--cyan)' : 'transparent',
+                  color: tab === t ? '#000' : 'var(--text3)',
+                  transition: 'background 0.15s',
+                  textTransform: 'capitalize',
                 }}
               >
-                {t === 'deposit' ? 'Provide Liquidity' : 'Withdraw'}
+                {t}
               </button>
             ))}
           </div>
 
-          {/* Market + type */}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Market</label>
-              <Select value={market} onChange={v => { setMarket(v as Market); setStrikeIdx(2); }}>
-                {MARKETS.map(m => <option key={m} value={m}>{m}</option>)}
-              </Select>
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Option type</label>
-              <Select value={optType} onChange={v => setOptType(v as OptionType)}>
-                {OPTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-              </Select>
-            </div>
+          <label style={{ fontSize: 12, color: 'var(--text3)', display: 'block', marginBottom: 6 }}>
+            {tab === 'deposit' ? 'USDC Amount' : 'USDC Value to Withdraw'}
+          </label>
+          <div style={{ position: 'relative', marginBottom: 16 }}>
+            <span style={{
+              position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
+              fontSize: 13, color: 'var(--text3)', fontFamily: 'var(--mono)',
+            }}>
+              $
+            </span>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+              placeholder="0.00"
+              style={{
+                width: '100%',
+                background: 'var(--bg3)',
+                border: '1px solid var(--border)',
+                borderRadius: 6,
+                padding: '10px 12px 10px 24px',
+                fontSize: 16,
+                fontFamily: 'var(--mono)',
+                color: 'var(--text)',
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
           </div>
 
-          {/* Strike */}
-          <div>
-            <label style={labelStyle}>Strike</label>
-            {spot > 0 && strikes.length > 0 ? (
-              <Select value={String(strikeIdx)} onChange={v => setStrikeIdx(Number(v))}>
-                {strikes.map((s, i) => (
-                  <option key={s} value={String(i)}>
-                    ${s.toLocaleString('en-US')}
-                    {i === 2 ? ' (ATM)' : i < 2 ? ' (ITM)' : ' (OTM)'}
-                  </option>
-                ))}
-              </Select>
-            ) : (
-              <div style={{ ...inputStyle, color: 'var(--text3)', display: 'flex', alignItems: 'center' }}>
-                <span className="skeleton" style={{ width: 100, height: 14, display: 'inline-block' }} />
-              </div>
-            )}
-          </div>
-
-          {/* Expiry */}
-          <div>
-            <label style={labelStyle}>Expiry</label>
-            <Select value={expiry} onChange={v => setExpiry(v as Expiry)}>
-              {EXPIRY_OPTIONS.map(e => <option key={e} value={e}>{e}</option>)}
-            </Select>
-          </div>
-
-          {/* Amount */}
-          <div>
-            <label style={labelStyle}>
-              {tab === 'deposit' ? 'USDC amount' : 'LP tokens to burn'}
-            </label>
-            <div style={{ position: 'relative' }}>
-              <input
-                type="number"
-                min="0"
-                placeholder="0.00"
-                value={amount}
-                onChange={e => setAmount(e.target.value)}
-                style={{
-                  ...inputStyle,
-                  width: '100%',
-                  paddingRight: 56,
-                }}
-              />
-              <span style={{
-                position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-                fontSize: 11, fontWeight: 600, color: 'var(--text3)', pointerEvents: 'none',
-              }}>
-                {tab === 'deposit' ? 'USDC' : 'LP'}
-              </span>
-            </div>
-          </div>
-
-          {/* Pool info */}
-          {strike > 0 && (
+          {previewVlp !== null && amount && (
             <div style={{
-              background: 'var(--bg)',
-              border: '1px solid var(--border)',
+              background: 'rgba(85,195,233,0.06)',
+              border: '1px solid rgba(85,195,233,0.2)',
               borderRadius: 6,
-              padding: '10px 12px',
-              fontSize: 11,
+              padding: '10px 14px',
+              marginBottom: 16,
+              fontSize: 12,
               color: 'var(--text2)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 4,
             }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text3)' }}>Series</span>
-                <span className="mono">{market} {optType} ${strike.toLocaleString('en-US')} {expiry}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text3)' }}>Pool status</span>
-                <span style={{ color: 'var(--amber)' }}>Not initialized</span>
-              </div>
+              {tab === 'deposit' ? (
+                <>You will receive{' '}
+                  <span style={{ color: 'var(--cyan)', fontWeight: 700, fontFamily: 'var(--mono)' }}>
+                    {fmt(previewVlp, 4)} vLP
+                  </span>
+                  {' '}at ${fmt(vlpPrice, 4)} per vLP
+                </>
+              ) : (
+                <>Burning{' '}
+                  <span style={{ color: 'var(--amber)', fontWeight: 700, fontFamily: 'var(--mono)' }}>
+                    {fmt(previewVlp, 4)} vLP
+                  </span>
+                  {' '}→ ~$
+                  <span style={{ fontWeight: 700, fontFamily: 'var(--mono)' }}>
+                    {fmt(parseFloat(amount))}
+                  </span>
+                  {' '}USDC
+                </>
+              )}
             </div>
           )}
 
-          {/* Status message */}
-          {status !== 'idle' && txMsg && (
-            <div style={{
-              padding: '10px 12px',
-              borderRadius: 6,
-              fontSize: 11,
-              lineHeight: 1.5,
-              background: status === 'success' ? 'var(--green-dim)' : status === 'error' ? 'var(--red-dim)' : 'var(--cyan-dim)',
-              color: status === 'success' ? 'var(--green)' : status === 'error' ? 'var(--red)' : 'var(--cyan)',
-              border: `1px solid ${status === 'success' ? 'rgba(2,199,123,0.2)' : status === 'error' ? 'rgba(235,54,90,0.2)' : 'rgba(85,195,233,0.2)'}`,
-            }}>
-              {status === 'pending' ? '⏳ ' : status === 'success' ? '✓ ' : '⚠ '}
-              {txMsg}
-            </div>
-          )}
-
-          {/* Submit */}
           <button
             onClick={handleSubmit}
-            disabled={status === 'pending' || !wallet.connected}
+            disabled={loading || !wallet.publicKey || !amount}
             style={{
               width: '100%',
-              padding: '12px 0',
-              border: 'none',
+              padding: '12px',
               borderRadius: 6,
-              fontSize: 14,
-              fontWeight: 700,
-              cursor: status === 'pending' || !wallet.connected ? 'not-allowed' : 'pointer',
-              background: !wallet.connected
+              border: 'none',
+              background: !wallet.publicKey
                 ? 'var(--bg3)'
                 : tab === 'deposit'
-                  ? 'var(--green)'
-                  : 'var(--cyan)',
-              color: !wallet.connected ? 'var(--text3)' : '#000',
-              opacity: status === 'pending' ? 0.7 : 1,
+                  ? 'var(--cyan)'
+                  : 'var(--amber)',
+              color: !wallet.publicKey ? 'var(--text3)' : '#000',
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: !wallet.publicKey || loading || !amount ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.7 : 1,
               transition: 'opacity 0.15s',
             }}
           >
-            {!wallet.connected
-              ? 'Connect wallet to continue'
-              : status === 'pending'
-                ? 'Processing…'
+            {!wallet.publicKey
+              ? 'Connect Wallet'
+              : loading
+                ? 'Confirming...'
                 : tab === 'deposit'
-                  ? `Add Liquidity`
-                  : `Withdraw Liquidity`}
+                  ? 'Deposit USDC'
+                  : 'Withdraw USDC'}
           </button>
+
+          {err && (
+            <div style={{
+              marginTop: 10, fontSize: 12, color: 'var(--red)',
+              padding: '8px 12px', background: 'rgba(235,54,90,0.08)', borderRadius: 4,
+            }}>
+              {err}
+            </div>
+          )}
+          {txSig && (
+            <div style={{
+              marginTop: 10, fontSize: 12, color: 'var(--green)',
+              padding: '8px 12px', background: 'rgba(2,199,123,0.08)', borderRadius: 4,
+            }}>
+              Confirmed ·{' '}
+              <a
+                href={`https://solscan.io/tx/${txSig}?cluster=devnet`}
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: 'var(--cyan)', textDecoration: 'none' }}
+              >
+                View on Solscan
+              </a>
+            </div>
+          )}
+        </div>
+
+        {/* Right column: position + explainer */}
+        <div style={{ width: 300, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+          {/* User position */}
+          <div style={{
+            background: 'var(--bg2)',
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+            padding: '20px 24px',
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 16, color: 'var(--text)' }}>
+              Your Position
+            </div>
+            {!wallet.publicKey ? (
+              <div style={{ fontSize: 12, color: 'var(--text3)' }}>Connect wallet to view your position.</div>
+            ) : posLoading ? (
+              <div style={{ fontSize: 12, color: 'var(--text3)' }}>Loading...</div>
+            ) : vlpTokens === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--text3)' }}>No position yet. Deposit USDC to get started.</div>
+            ) : (
+              <>
+                {([
+                  { label: 'vLP Balance',    value: `${fmt(vlpTokens, 4)} vLP`, accent: 'var(--cyan)' as const },
+                  { label: 'Current Value',  value: `$${fmt(userValueUsdc)}` },
+                  { label: 'Cost Basis',     value: `$${fmt(usdcDeposited)}` },
+                  {
+                    label: 'Unrealized PnL',
+                    value: `${unrealizedPnl >= 0 ? '+' : ''}$${fmt(unrealizedPnl)}`,
+                    accent: (unrealizedPnl >= 0 ? 'var(--green)' : 'var(--red)') as string,
+                  },
+                  {
+                    label: 'Share of Vault',
+                    value: totalVlpTokens > 0 ? `${fmt((vlpTokens / totalVlpTokens) * 100, 4)}%` : '—',
+                  },
+                ] as { label: string; value: string; accent?: string }[]).map(({ label, value, accent }) => (
+                  <div key={label} style={{
+                    display: 'flex', justifyContent: 'space-between',
+                    padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 12,
+                  }}>
+                    <span style={{ color: 'var(--text3)' }}>{label}</span>
+                    <span style={{ fontFamily: 'var(--mono)', fontWeight: 600, color: accent ?? 'var(--text)' }}>
+                      {value}
+                    </span>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+
+          {/* How it works */}
+          <div style={{
+            background: 'var(--bg2)',
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+            padding: '16px 20px',
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10, color: 'var(--text)' }}>
+              How vLP Works
+            </div>
+            {[
+              'Deposit USDC → receive vLP tokens (your share of the vault).',
+              'The vault underwrites all options. Premiums collected increase the vLP price.',
+              'vLP price = Total Collateral ÷ Total vLP Supply.',
+              'Withdrawals are subject to a solvency check (120% OI coverage requirement).',
+            ].map((t, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8, fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>
+                <span style={{ color: 'var(--cyan)', flexShrink: 0, fontWeight: 700 }}>•</span>
+                <span>{t}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
-  );
-}
-
-// ── Shared micro-components ───────────────────────────────────────────────────
-
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  fontSize: 11,
-  color: 'var(--text3)',
-  textTransform: 'uppercase',
-  letterSpacing: '0.06em',
-  marginBottom: 6,
-};
-
-const inputStyle: React.CSSProperties = {
-  background: 'var(--bg)',
-  border: '1px solid var(--border)',
-  borderRadius: 6,
-  padding: '9px 12px',
-  fontSize: 13,
-  color: 'var(--text)',
-  fontFamily: 'var(--mono)',
-  width: '100%',
-};
-
-function Select({ value, onChange, children }: {
-  value: string;
-  onChange: (v: string) => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <select
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      style={{
-        ...inputStyle,
-        appearance: 'none',
-        WebkitAppearance: 'none',
-        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%233d5570'/%3E%3C/svg%3E")`,
-        backgroundRepeat: 'no-repeat',
-        backgroundPosition: 'right 10px center',
-        paddingRight: 28,
-        cursor: 'pointer',
-      }}
-    >
-      {children}
-    </select>
   );
 }

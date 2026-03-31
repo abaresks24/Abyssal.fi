@@ -276,6 +276,143 @@
       ]
     },
     {
+      "name": "deposit_vault",
+      "docs": [
+        "Deposit USDC into the global vault and receive vLP tokens"
+      ],
+      "discriminator": [
+        126,
+        224,
+        21,
+        255,
+        228,
+        53,
+        117,
+        33
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  117,
+                  115,
+                  100,
+                  99
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vlp_position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  108,
+                  112,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "depositor"
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "depositor_usdc",
+          "writable": true
+        },
+        {
+          "name": "depositor",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "DepositVaultArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "exercise_option",
       "docs": [
         "Manually exercise an ITM option",
@@ -1014,9 +1151,15 @@
           "name": "iv_oracle"
         },
         {
+          "name": "holder",
+          "docs": [
+            "Option holder's wallet pubkey — used to verify the position PDA"
+          ]
+        },
+        {
           "name": "position",
           "docs": [
-            "Position to settle — owner passed as remaining_accounts or via constraint"
+            "Position to settle — PDA verified via holder + vault seeds"
           ],
           "writable": true
         },
@@ -1154,6 +1297,135 @@
           }
         }
       ]
+    },
+    {
+      "name": "withdraw_vault",
+      "docs": [
+        "Burn vLP tokens and withdraw proportional USDC from the global vault"
+      ],
+      "discriminator": [
+        135,
+        7,
+        237,
+        120,
+        149,
+        94,
+        95,
+        7
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  117,
+                  115,
+                  100,
+                  99
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vlp_position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  108,
+                  112,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "withdrawer"
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "withdrawer_usdc",
+          "writable": true
+        },
+        {
+          "name": "withdrawer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "WithdrawVaultArgs"
+            }
+          }
+        }
+      ]
     }
   ],
   "accounts": [
@@ -1220,6 +1492,19 @@
         85,
         29,
         36
+      ]
+    },
+    {
+      "name": "VaultLPPosition",
+      "discriminator": [
+        228,
+        199,
+        57,
+        86,
+        55,
+        163,
+        57,
+        196
       ]
     }
   ],
@@ -1396,36 +1681,41 @@
     },
     {
       "code": 6031,
+      "name": "IVJumpTooLarge",
+      "msg": "IV jump too large: new IV deviates >50% from current value"
+    },
+    {
+      "code": 6032,
       "name": "SettlementFeeCapExceeded",
       "msg": "Settlement fee exceeds cap"
     },
     {
-      "code": 6032,
+      "code": 6033,
       "name": "InvalidSettlementPrice",
       "msg": "Invalid settlement price"
     },
     {
-      "code": 6033,
+      "code": 6034,
       "name": "UnknownMarket",
       "msg": "Unknown market identifier"
     },
     {
-      "code": 6034,
+      "code": 6035,
       "name": "MarketNotSupported",
       "msg": "Market is not supported"
     },
     {
-      "code": 6035,
+      "code": 6036,
       "name": "NegativeSqrtInput",
       "msg": "Square root input is negative"
     },
     {
-      "code": 6036,
+      "code": 6037,
       "name": "LogNonPositive",
       "msg": "Logarithm input must be positive"
     },
     {
-      "code": 6037,
+      "code": 6038,
       "name": "U64Overflow",
       "msg": "Value exceeds u64 maximum"
     }
@@ -1643,6 +1933,28 @@
           {
             "name": "target_delta",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DepositVaultArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "usdc_amount",
+            "docs": [
+              "USDC amount to deposit, 6 dec"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "min_vlp_tokens",
+            "docs": [
+              "Minimum vLP tokens expected (slippage protection, use 0 to skip)"
+            ],
+            "type": "u64"
           }
         ]
       }
@@ -1892,7 +2204,9 @@
     {
       "name": "Market",
       "docs": [
-        "Supported underlying markets"
+        "Supported underlying markets",
+        "Discriminants must be stable — never reorder, only append.",
+        "Crypto: 0–2 | Equities: 3–8 | Commodities: 9–14"
       ],
       "type": {
         "kind": "enum",
@@ -1905,6 +2219,42 @@
           },
           {
             "name": "SOL"
+          },
+          {
+            "name": "NVDA"
+          },
+          {
+            "name": "TSLA"
+          },
+          {
+            "name": "PLTR"
+          },
+          {
+            "name": "CRCL"
+          },
+          {
+            "name": "HOOD"
+          },
+          {
+            "name": "SP500"
+          },
+          {
+            "name": "XAU"
+          },
+          {
+            "name": "XAG"
+          },
+          {
+            "name": "PAXG"
+          },
+          {
+            "name": "PLATINUM"
+          },
+          {
+            "name": "NATGAS"
+          },
+          {
+            "name": "COPPER"
           }
         ]
       }
@@ -2155,6 +2505,14 @@
             "type": "bool"
           },
           {
+            "name": "total_vlp_tokens",
+            "docs": [
+              "Total vLP tokens in circulation (global vault LP shares)",
+              "Stored in the first 8 bytes of the former _padding field"
+            ],
+            "type": "u64"
+          },
+          {
             "name": "_padding",
             "docs": [
               "Reserved space for future fields"
@@ -2162,7 +2520,7 @@
             "type": {
               "array": [
                 "u8",
-                64
+                56
               ]
             }
           }
@@ -2230,7 +2588,14 @@
           {
             "name": "hedge_size",
             "docs": [
-              "Notional USDC size of the hedge trade, 6 dec"
+              "Notional USDC size of the hedge trade (6 dec) — used for size guard only"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "spot_price",
+            "docs": [
+              "Underlying spot price (6 dec) — used to convert USDC notional → delta units"
             ],
             "type": "u64"
           },
@@ -2378,6 +2743,78 @@
           },
           {
             "name": "latest_price",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VaultLPPosition",
+      "docs": [
+        "Global vault LP position — tracks a user's vLP share tokens"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "vlp_tokens",
+            "docs": [
+              "vLP tokens held by this user"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "usdc_deposited",
+            "docs": [
+              "Cumulative USDC deposited (cost basis tracking)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "_padding",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "WithdrawVaultArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vlp_tokens",
+            "docs": [
+              "vLP tokens to burn"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "min_usdc_out",
+            "docs": [
+              "Minimum USDC to receive (slippage protection, use 0 to skip)"
+            ],
             "type": "u64"
           }
         ]

@@ -118,3 +118,29 @@ pub struct LPPosition {
 impl LPPosition {
     pub const LEN: usize = 8 + 1 + 32 + 32 + 8 + 8 + 8 + 32;
 }
+
+/// Global vault LP position — tracks a user's vLP share tokens
+#[account]
+#[derive(Debug)]
+pub struct VaultLPPosition {
+    pub bump: u8,
+    pub owner: Pubkey,
+    pub vault: Pubkey,
+    /// vLP tokens held by this user
+    pub vlp_tokens: u64,
+    /// Cumulative USDC deposited (cost basis tracking)
+    pub usdc_deposited: u64,
+    pub created_at: i64,
+    pub _padding: [u8; 32],
+}
+
+impl VaultLPPosition {
+    pub const LEN: usize = 8  // discriminator
+        + 1   // bump
+        + 32  // owner
+        + 32  // vault
+        + 8   // vlp_tokens
+        + 8   // usdc_deposited
+        + 8   // created_at
+        + 32; // padding
+}

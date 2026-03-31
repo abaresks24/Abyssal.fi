@@ -11,6 +11,7 @@ export interface VaultStats {
   openInterest:    number; // USDC
   deltaNet:        number; // signed delta units
   feesCollected:   number; // USDC
+  totalVlpTokens:  number; // vLP supply
   paused:          boolean;
   loading:         boolean;
   error:           string | null;
@@ -21,6 +22,7 @@ const DEFAULT: VaultStats = {
   openInterest:    0,
   deltaNet:        0,
   feesCollected:   0,
+  totalVlpTokens:  0,
   paused:          false,
   loading:         true,
   error:           null,
@@ -55,6 +57,7 @@ export function useVaultStats(): VaultStats {
             openInterest:    (vault.openInterest    as BN).toNumber() / SCALE,
             deltaNet:        (vault.deltaNet        as BN).toNumber() / SCALE,
             feesCollected:   (vault.feesCollected   as BN).toNumber() / SCALE,
+            totalVlpTokens:  (vault.totalVlpTokens  as BN).toNumber() / SCALE,
             paused:          vault.paused as boolean,
             loading:         false,
             error:           null,
