@@ -1,7 +1,6 @@
 'use client';
-import React from 'react';
-import { Nav } from './Nav';
-import { TickerBar } from './TickerBar';
+import React, { useState } from 'react';
+import { Nav, type View } from './Nav';
 import { MarketSelector } from '@/components/market/MarketSelector';
 import { IVPanel } from '@/components/market/IVPanel';
 import { KeeperStatus } from '@/components/market/KeeperStatus';
@@ -10,24 +9,12 @@ import { TradeHistory } from '@/components/market/TradeHistory';
 import { TradingViewChart } from '@/components/chart/TradingViewChart';
 import { OptionBuilder } from '@/components/builder/OptionBuilder';
 import { OptionBuilderProvider } from '@/hooks/useOptionBuilder';
+import { LPVault } from '@/components/lp/LPVault';
+import { Portfolio } from '@/components/portfolio/Portfolio';
+import { Leaderboard } from '@/components/leaderboard/Leaderboard';
+import { Analytics } from '@/components/analytics/Analytics';
 
-function CenterPanel() {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-
-      {/* Chart — fills all available space; TradingViewChart manages its own header */}
-      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
-        <TradingViewChart />
-      </div>
-
-      {/* Option Builder — fixed 280px height below chart */}
-      <div style={{ height: 280, borderTop: '1px solid var(--border)', flexShrink: 0, overflowY: 'auto', background: 'var(--bg1)' }}>
-        <OptionBuilder />
-      </div>
-
-    </div>
-  );
-}
+// ── Trade view (3-column) ─────────────────────────────────────────────────────
 
 function LeftPanel() {
   return (
@@ -51,6 +38,19 @@ function LeftPanel() {
   );
 }
 
+function CenterPanel() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+        <TradingViewChart />
+      </div>
+      <div style={{ height: 280, borderTop: '1px solid var(--border)', flexShrink: 0, overflowY: 'auto', background: 'var(--bg1)' }}>
+        <OptionBuilder />
+      </div>
+    </div>
+  );
+}
+
 function RightPanel() {
   return (
     <div style={{
@@ -62,11 +62,9 @@ function RightPanel() {
       overflow: 'hidden',
       flexShrink: 0,
     }}>
-      {/* Order Book — top, flex 1 */}
       <div style={{ flex: 1, minHeight: 0, borderBottom: '1px solid var(--border)' }}>
         <OrderBook />
       </div>
-      {/* Options Flow / Trade History — bottom, fixed height */}
       <div style={{ height: 260, flexShrink: 0 }}>
         <TradeHistory />
       </div>
@@ -74,18 +72,34 @@ function RightPanel() {
   );
 }
 
+function TradeView() {
+  return (
+    <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
+      <LeftPanel />
+      <div style={{ flex: 1, overflow: 'hidden', background: 'var(--bg)' }}>
+        <CenterPanel />
+      </div>
+      <RightPanel />
+    </div>
+  );
+}
+
+// ── Root layout ───────────────────────────────────────────────────────────────
+
 export default function TradingLayout() {
+  const [view, setView] = useState<View>('trade');
+
   return (
     <OptionBuilderProvider>
       <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <Nav />
-        <TickerBar />
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
-          <LeftPanel />
-          <div style={{ flex: 1, overflow: 'hidden', background: 'var(--bg)' }}>
-            <CenterPanel />
-          </div>
-          <RightPanel />
+        <Nav view={view} setView={setView} />
+
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          {view === 'trade'       && <TradeView />}
+          {view === 'portfolio'   && <Portfolio />}
+          {view === 'lp'          && <LPVault />}
+          {view === 'leaderboard' && <Leaderboard />}
+          {view === 'analytics'   && <Analytics />}
         </div>
       </div>
     </OptionBuilderProvider>
