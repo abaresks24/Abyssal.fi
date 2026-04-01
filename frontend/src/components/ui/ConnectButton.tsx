@@ -116,14 +116,25 @@ function PrivyConnectButton() {
 // ── Solana wallet-adapter button — custom inline picker ──────────────────────
 
 function AdapterConnectButton() {
-  const { publicKey, disconnect, wallets, select, connect, connecting } = useWallet();
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [menuOpen, setMenuOpen]     = useState(false);
+  const { publicKey, disconnect, wallet, wallets, select, connect, connecting } = useWallet();
+  const [pickerOpen, setPickerOpen]   = useState(false);
+  const [menuOpen, setMenuOpen]       = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
+  const [pendingName, setPendingName] = useState<string | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
   const menuRef   = useRef<HTMLDivElement>(null);
 
   const address = publicKey?.toBase58() ?? null;
+
+  // select() is a React setState — the adapter only switches on the next render.
+  // Wait for wallet.adapter.name to match our selection, THEN call connect().
+  useEffect(() => {
+    if (!pendingName) return;
+    if (wallet?.adapter.name === pendingName) {
+      setPendingName(null);
+      connect().catch((e: any) => setConnectError(e?.message ?? 'Connection failed'));
+    }
+  }, [wallet, pendingName, connect]);
 
   // Close pickers on outside click
   useEffect(() => {
@@ -135,16 +146,11 @@ function AdapterConnectButton() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const handleSelectWallet = useCallback(async (walletName: string) => {
+  const handleSelectWallet = useCallback((walletName: string) => {
     setConnectError(null);
     setPickerOpen(false);
-    try {
-      // select() sets the active adapter; connect() triggers the wallet popup
-      select(walletName as any);
-      // connect() is called automatically by the adapter after select() in v0.15
-    } catch (e: any) {
-      setConnectError(e?.message ?? 'Connection failed');
-    }
+    setPendingName(walletName);
+    select(walletName as any);
   }, [select]);
 
   // Separate detected (installed) and available (not installed) wallets
