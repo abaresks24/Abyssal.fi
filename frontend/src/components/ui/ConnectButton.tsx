@@ -116,25 +116,14 @@ function PrivyConnectButton() {
 // ── Solana wallet-adapter button — custom inline picker ──────────────────────
 
 function AdapterConnectButton() {
-  const { publicKey, disconnect, wallet, wallets, select, connect, connecting } = useWallet();
-  const [pickerOpen, setPickerOpen]   = useState(false);
-  const [menuOpen, setMenuOpen]       = useState(false);
+  const { publicKey, disconnect, wallets, select, connecting } = useWallet();
+  const [pickerOpen, setPickerOpen]     = useState(false);
+  const [menuOpen, setMenuOpen]         = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
-  const [pendingName, setPendingName] = useState<string | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
   const menuRef   = useRef<HTMLDivElement>(null);
 
   const address = publicKey?.toBase58() ?? null;
-
-  // select() is a React setState — the adapter only switches on the next render.
-  // Wait for wallet.adapter.name to match our selection, THEN call connect().
-  useEffect(() => {
-    if (!pendingName) return;
-    if (wallet?.adapter.name === pendingName) {
-      setPendingName(null);
-      connect().catch((e: any) => setConnectError(e?.message ?? 'Connection failed'));
-    }
-  }, [wallet, pendingName, connect]);
 
   // Close pickers on outside click
   useEffect(() => {
@@ -146,11 +135,17 @@ function AdapterConnectButton() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const handleSelectWallet = useCallback((walletName: string) => {
+  // Must stay synchronous inside the click handler so the wallet popup is
+  // treated as a direct user interaction (async / useEffect breaks Phantom).
+  const handleSelectWallet = useCallback((w: typeof wallets[0]) => {
     setConnectError(null);
     setPickerOpen(false);
-    setPendingName(walletName);
-    select(walletName as any);
+    // Register the wallet with the provider (React state update, async)
+    select(w.adapter.name as any);
+    // Trigger the popup directly on the adapter instance — stays in click context
+    w.adapter.connect().catch((e: any) => {
+      setConnectError(e?.message ?? 'Connection failed');
+    });
   }, [select]);
 
   // Separate detected (installed) and available (not installed) wallets
@@ -184,7 +179,7 @@ function AdapterConnectButton() {
                 {detected.map(w => (
                   <button
                     key={w.adapter.name}
-                    onClick={() => handleSelectWallet(w.adapter.name)}
+                    onClick={() => handleSelectWallet(w)}
                     style={{ ...menuItemStyle, display: 'flex', alignItems: 'center', gap: 8 }}
                   >
                     {w.adapter.icon && (
@@ -205,7 +200,7 @@ function AdapterConnectButton() {
                 {available.map(w => (
                   <button
                     key={w.adapter.name}
-                    onClick={() => handleSelectWallet(w.adapter.name)}
+                    onClick={() => handleSelectWallet(w)}
                     style={{ ...menuItemStyle, display: 'flex', alignItems: 'center', gap: 8, opacity: 0.6 }}
                   >
                     {w.adapter.icon && (
