@@ -52,17 +52,23 @@ function PrivyAdapterSync() {
   const syncedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const externalWallet = privyWallets.find(w => w.walletClientType !== 'privy');
+    // ConnectedStandardSolanaWallet exposes .address and .standardWallet.name
+    const externalWallet = privyWallets.find(w => {
+      const name = (w as any).standardWallet?.name ?? '';
+      return name !== 'Privy';
+    });
 
     if (authenticated && externalWallet) {
       if (syncedRef.current === externalWallet.address) return;
 
+      const walletName = (externalWallet as any).standardWallet?.name ?? '';
       const adapterWallet = adapterWallets.find(w =>
-        w.adapter.name.toLowerCase() === externalWallet.walletClientType.toLowerCase()
+        w.adapter.name.toLowerCase() === walletName.toLowerCase()
       );
-      if (adapterWallet) {
+      if (adapterWallet && !connected) {
         syncedRef.current = externalWallet.address;
         select(adapterWallet.adapter.name as any);
+        // Wallet already approved via SIWS — no popup will appear
         adapterWallet.adapter.connect().catch(() => { syncedRef.current = null; });
       }
       return;

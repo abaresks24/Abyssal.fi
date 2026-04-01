@@ -1,8 +1,13 @@
 'use client';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { usePrivy, useLogout } from '@privy-io/react-auth';
+import { usePrivy, useLogout, useLoginWithSiws } from '@privy-io/react-auth';
 import { useWallets } from '@privy-io/react-auth/solana';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { WalletReadyState, type MessageSignerWalletAdapter } from '@solana/wallet-adapter-base';
+
+// bs58 v4 has no type declarations — inline require is the cleanest workaround
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const bs58Encode = (require('bs58') as { encode: (buf: Uint8Array) => string }).encode;
 import { PRIVY_ENABLED, usePrivyReady } from '@/components/WalletProvider';
 
 // ── Devnet USDC faucet ───────────────────────────────────────────────────────
@@ -50,44 +55,162 @@ function FaucetItem({ address, onClose }: { address: string; onClose: () => void
   );
 }
 
-// ── Privy connect button ─────────────────────────────────────────────────────
-// connectOrCreateWallet() opens Privy's modal.
-// Privy uses the toSolanaWalletConnectors() (initialised at module level in
-// WalletProvider) to detect installed Solana wallets and trigger their native
-// approval popup when the user selects one.
+// ── Privy SIWS connect button ─────────────────────────────────────────────────
+// Why SIWS and not connectOrCreateWallet()?
+// Phantom requires connect() to be called in the same synchronous tick as
+// the user's click event. Privy's modal does async work before calling
+// phantom.connect(), which breaks the "user gesture" context → no popup.
+//
+// Solution:
+//   1. Our picker calls w.adapter.connect() synchronously in onClick → popup opens
+//   2. After the wallet connects we sign a SIWS message → Privy authenticates
+//   3. Privy session is established; useWallet().publicKey is set for anchor_client
 
 function PrivyConnectButton() {
-  const { ready, authenticated, connectOrCreateWallet } = usePrivy();
+  const { ready, authenticated, login } = usePrivy();
   const { logout } = useLogout();
-  const { wallets } = useWallets();
-  const { publicKey, disconnect } = useWallet(); // synced by PrivyAdapterSync
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const { wallets: privyWallets } = useWallets();
+  const { generateSiwsMessage, loginWithSiws } = useLoginWithSiws();
+  const { publicKey, wallets: adapterWallets, select, connecting, disconnect } = useWallet();
 
-  // Prefer adapter publicKey (synced from Privy), fall back to Privy wallet address
-  const address: string | null = publicKey?.toBase58() ?? wallets[0]?.address ?? null;
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [menuOpen, setMenuOpen]     = useState(false);
+  const [status, setStatus]         = useState<'idle' | 'connecting' | 'signing' | 'error'>('idle');
+  const [errorMsg, setErrorMsg]     = useState<string | null>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const menuRef   = useRef<HTMLDivElement>(null);
+
+  const address: string | null = publicKey?.toBase58() ?? privyWallets[0]?.address ?? null;
 
   useEffect(() => {
-    if (!menuOpen) return;
     const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerOpen(false);
+      if (menuRef.current  && !menuRef.current.contains(e.target as Node))   setMenuOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [menuOpen]);
+  }, []);
+
+  // ── SIWS flow ──────────────────────────────────────────────────────────────
+  // Step 1 (synchronous in onClick) — adapter.connect() → Phantom popup opens
+  // Step 2 (async after approval)   — generate SIWS → sign → loginWithSiws
+  const handleSelectWallet = useCallback((w: typeof adapterWallets[0]) => {
+    setErrorMsg(null);
+    setPickerOpen(false);
+    setStatus('connecting');
+
+    select(w.adapter.name as any);
+
+    // MUST be synchronous from onClick — this is what opens the Phantom popup
+    w.adapter.connect()
+      .then(async () => {
+        const walletAddress = w.adapter.publicKey?.toBase58();
+        if (!walletAddress) throw new Error('No public key after connect');
+
+        setStatus('signing');
+        const message = await generateSiwsMessage({ address: walletAddress });
+        const encoded  = new TextEncoder().encode(message);
+
+        // signMessage is available after connect()
+        const signer = w.adapter as unknown as MessageSignerWalletAdapter;
+        if (!signer.signMessage) throw new Error('Wallet does not support signMessage');
+        const sig = await signer.signMessage(encoded);
+        const signatureB58 = bs58Encode(sig);
+
+        await loginWithSiws({
+          message,
+          signature: signatureB58,
+          walletClientType: w.adapter.name.toLowerCase() as any,
+          connectorType: 'injected',
+        });
+
+        setStatus('idle');
+      })
+      .catch((e: any) => {
+        setStatus('error');
+        setErrorMsg(e?.message ?? 'Connection failed');
+      });
+  }, [select, generateSiwsMessage, loginWithSiws]);
+
+  const detected = adapterWallets.filter(w =>
+    w.readyState === WalletReadyState.Installed ||
+    w.readyState === WalletReadyState.Loadable
+  );
+  const notInstalled = adapterWallets
+    .filter(w => w.readyState === WalletReadyState.NotDetected)
+    .slice(0, 4);
 
   if (!ready) return <button disabled style={btnStyle({ muted: true })}>Loading…</button>;
 
+  // ── Not connected ──────────────────────────────────────────────────────────
   if (!authenticated || !address) {
+    const busy = status === 'connecting' || status === 'signing' || connecting;
     return (
-      <button onClick={connectOrCreateWallet} style={btnStyle({ primary: true })}>
-        Connect Wallet
-      </button>
+      <div ref={pickerRef} style={{ position: 'relative' }}>
+        <button
+          onClick={() => { if (!busy) setPickerOpen(v => !v); }}
+          disabled={busy}
+          style={btnStyle({ primary: true })}
+        >
+          {status === 'connecting' ? 'Connecting…'
+            : status === 'signing'   ? 'Sign in wallet…'
+            : 'Connect Wallet'}
+        </button>
+
+        {pickerOpen && (
+          <DropdownMenu onClose={() => setPickerOpen(false)}>
+            {/* Detected wallets */}
+            {detected.length > 0 && (
+              <>
+                <SectionLabel>Wallets</SectionLabel>
+                {detected.map(w => (
+                  <WalletRow key={w.adapter.name} wallet={w} onClick={() => handleSelectWallet(w)} />
+                ))}
+              </>
+            )}
+
+            {notInstalled.length > 0 && (
+              <>
+                <SectionLabel divider>Get a wallet</SectionLabel>
+                {notInstalled.map(w => (
+                  <WalletRow key={w.adapter.name} wallet={w} onClick={() => handleSelectWallet(w)} dim />
+                ))}
+              </>
+            )}
+
+            {detected.length === 0 && notInstalled.length === 0 && (
+              <div style={{ padding: '12px', fontSize: 12, color: 'var(--text3)' }}>
+                No Solana wallet found.<br />Install Phantom or Solflare.
+              </div>
+            )}
+
+            {/* Email / Social — Privy's own modal, email only */}
+            <SectionLabel divider>Email / Social</SectionLabel>
+            <button
+              onClick={() => {
+                setPickerOpen(false);
+                login({ loginMethods: ['email', 'google', 'twitter'] } as any);
+              }}
+              style={{ ...menuItemStyle, display: 'flex', alignItems: 'center', gap: 8 }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, opacity: 0.7 }}>
+                <rect x="2" y="4" width="20" height="16" rx="2" stroke="currentColor" strokeWidth="1.6" />
+                <path d="M2 8l10 7 10-7" stroke="currentColor" strokeWidth="1.6" />
+              </svg>
+              Continue with email / social
+            </button>
+
+            {errorMsg && (
+              <div style={{ padding: '6px 12px', fontSize: 11, color: 'var(--red)' }}>{errorMsg}</div>
+            )}
+          </DropdownMenu>
+        )}
+      </div>
     );
   }
 
+  // ── Connected ──────────────────────────────────────────────────────────────
   const short = `${address.slice(0, 4)}…${address.slice(-4)}`;
-
   return (
     <div ref={menuRef} style={{ position: 'relative' }}>
       <button onClick={() => setMenuOpen(v => !v)} style={btnStyle({})}>
@@ -97,6 +220,7 @@ function PrivyConnectButton() {
           <path d="M1 1l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
+
       {menuOpen && (
         <DropdownMenu onClose={() => setMenuOpen(false)}>
           <div style={{ padding: '8px 12px', fontSize: 10, color: 'var(--text2)', fontFamily: 'var(--mono)', borderBottom: '1px solid var(--border)', wordBreak: 'break-all' }}>
@@ -106,9 +230,6 @@ function PrivyConnectButton() {
             Copy address
           </button>
           <FaucetItem address={address} onClose={() => setMenuOpen(false)} />
-          <button onClick={() => { connectOrCreateWallet(); setMenuOpen(false); }} style={menuItemStyle}>
-            Switch wallet
-          </button>
           <button
             onClick={() => { disconnect(); logout(); setMenuOpen(false); }}
             style={{ ...menuItemStyle, color: 'var(--red)' }}
@@ -121,21 +242,18 @@ function PrivyConnectButton() {
   );
 }
 
-// ── Fallback for local dev without a Privy app ID ────────────────────────────
+// ── Fallback: Privy not configured (local dev) ────────────────────────────────
 
 function AdapterConnectButton() {
   const { publicKey, disconnect, wallets, select, connecting } = useWallet();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-
   const address = publicKey?.toBase58() ?? null;
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
   }, []);
 
   const handleSelect = useCallback((w: typeof wallets[0]) => {
@@ -153,11 +271,7 @@ function AdapterConnectButton() {
         {open && (
           <DropdownMenu onClose={() => setOpen(false)}>
             {wallets.map(w => (
-              <button key={w.adapter.name} onClick={() => handleSelect(w)}
-                style={{ ...menuItemStyle, display: 'flex', alignItems: 'center', gap: 8 }}>
-                {w.adapter.icon && <img src={w.adapter.icon} alt="" width={16} height={16} style={{ borderRadius: 4 }} />}
-                {w.adapter.name}
-              </button>
+              <WalletRow key={w.adapter.name} wallet={w} onClick={() => handleSelect(w)} />
             ))}
           </DropdownMenu>
         )}
@@ -192,7 +306,33 @@ export function ConnectButton() {
   return <AdapterConnectButton />;
 }
 
-// ── Shared UI ─────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function SectionLabel({ children, divider }: { children: React.ReactNode; divider?: boolean }) {
+  return (
+    <div style={{
+      padding: '6px 12px 4px', fontSize: 10, color: 'var(--text3)',
+      textTransform: 'uppercase', letterSpacing: '0.06em',
+      borderTop: divider ? '1px solid var(--border)' : undefined,
+      marginTop: divider ? 4 : 0,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+function WalletRow({ wallet: w, onClick, dim }: {
+  wallet: ReturnType<typeof useWallet>['wallets'][0];
+  onClick: () => void;
+  dim?: boolean;
+}) {
+  return (
+    <button onClick={onClick} style={{ ...menuItemStyle, display: 'flex', alignItems: 'center', gap: 8, opacity: dim ? 0.55 : 1 }}>
+      {w.adapter.icon && <img src={w.adapter.icon} alt="" width={16} height={16} style={{ borderRadius: 4, flexShrink: 0 }} />}
+      {w.adapter.name}
+    </button>
+  );
+}
 
 function DropdownMenu({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
@@ -211,12 +351,9 @@ function btnStyle({ primary, muted }: { primary?: boolean; muted?: boolean } = {
     height: 28, padding: '0 12px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6,
     background: primary ? 'var(--cyan)' : 'var(--bg3)',
     border: primary ? 'none' : '1px solid var(--border2)',
-    borderRadius: 4,
-    color: primary ? '#0a121c' : 'var(--text)',
-    fontFamily: 'var(--font)',
-    fontWeight: primary ? 600 : 400,
-    cursor: muted ? 'default' : 'pointer',
-    opacity: muted ? 0.5 : 1,
+    borderRadius: 4, color: primary ? '#0a121c' : 'var(--text)',
+    fontFamily: 'var(--font)', fontWeight: primary ? 600 : 400,
+    cursor: muted ? 'default' : 'pointer', opacity: muted ? 0.5 : 1,
     whiteSpace: 'nowrap' as const,
   };
 }
