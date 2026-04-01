@@ -28,17 +28,22 @@ const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? '';
 export const PRIVY_ENABLED =
   PRIVY_APP_ID.length > 5 && !PRIVY_APP_ID.includes('YOUR_PRIVY');
 
+// toSolanaWalletConnectors() MUST be called at module level — calling it
+// inside a component re-creates the connectors object on every render and
+// prevents onMount/onUnmount from registering the wallet detection listeners.
+const solanaConnectors = PRIVY_ENABLED
+  ? toSolanaWalletConnectors({ shouldAutoConnect: false })
+  : undefined;
+
 // Context that signals PrivyProvider is mounted and safe to call Privy hooks.
 export const PrivyReadyContext = createContext(false);
 export const usePrivyReady = () => useContext(PrivyReadyContext);
 
 // ── Privy → Solana adapter bridge ────────────────────────────────────────────
-// When Privy connects an external wallet (Phantom, Solflare…), we call
-// select() + connect() on the matching Solana adapter so that useWallet()
-// (used by anchor_client for all on-chain calls) has the correct publicKey.
-//
-// The second connect() call does NOT show a popup: the wallet is already
-// unlocked/approved via Privy, so it returns immediately.
+// After Privy connects an external wallet (Phantom, Solflare…), sync it into
+// the Solana wallet-adapter so that anchor_client's useWallet() works.
+// The second adapter.connect() does NOT show a popup: Phantom is already
+// approved via Privy, so it returns immediately with the public key.
 
 function PrivyAdapterSync() {
   const { authenticated } = usePrivy();
@@ -47,30 +52,22 @@ function PrivyAdapterSync() {
   const syncedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    // ── Sync external wallet from Privy → adapter ──────────────────────────
     const externalWallet = privyWallets.find(w => w.walletClientType !== 'privy');
 
     if (authenticated && externalWallet) {
-      // Already synced for this wallet — skip
       if (syncedRef.current === externalWallet.address) return;
 
-      // Find the matching adapter by name (e.g. 'phantom' → 'Phantom')
       const adapterWallet = adapterWallets.find(w =>
         w.adapter.name.toLowerCase() === externalWallet.walletClientType.toLowerCase()
       );
-
       if (adapterWallet) {
         syncedRef.current = externalWallet.address;
         select(adapterWallet.adapter.name as any);
-        // Wallet already approved by user via Privy — no popup will appear
-        adapterWallet.adapter.connect().catch(() => {
-          syncedRef.current = null;
-        });
+        adapterWallet.adapter.connect().catch(() => { syncedRef.current = null; });
       }
       return;
     }
 
-    // ── Privy logged out → disconnect adapter ─────────────────────────────
     if (!authenticated && connected) {
       syncedRef.current = null;
       disconnect();
@@ -98,15 +95,12 @@ function SolanaAdapters({ children }: { children: ReactNode }) {
 
   return (
     <ConnectionProvider endpoint={SOLANA_RPC}>
-      <WalletProvider wallets={wallets} autoConnect>
+      <WalletProvider wallets={wallets} autoConnect={false}>
         {children}
       </WalletProvider>
     </ConnectionProvider>
   );
 }
-
-// ── Inner component — rendered inside both PrivyProvider and SolanaAdapters ──
-// Has access to both Privy hooks and Solana adapter hooks.
 
 function PrivyInner({ children }: { children: ReactNode }) {
   return (
@@ -136,6 +130,7 @@ export const WalletContextProvider: FC<Props> = ({ children }) => {
       <PrivyProvider
         appId={PRIVY_APP_ID}
         config={{
+          loginMethods: ['wallet', 'email'],
           appearance: {
             theme: 'dark',
             accentColor: '#55c3e9',
@@ -143,14 +138,13 @@ export const WalletContextProvider: FC<Props> = ({ children }) => {
             walletChainType: 'solana-only',
             landingHeader: 'Connect to Abyssal',
             loginMessage: 'Trade on-chain options on Solana',
-            walletList: ['detected_wallets', 'phantom', 'solflare', 'backpack', 'coinbase_wallet'],
+            walletList: ['detected_solana_wallets', 'phantom', 'solflare', 'backpack', 'coinbase_wallet'],
           },
-          loginMethods: ['wallet', 'email'],
           embeddedWallets: {
             solana: { createOnLogin: 'users-without-wallets' },
           },
           externalWallets: {
-            solana: { connectors: toSolanaWalletConnectors() },
+            solana: { connectors: solanaConnectors! },
           },
         }}
       >
