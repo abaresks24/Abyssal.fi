@@ -6,9 +6,11 @@ import {
   CrosshairMode,
   LineStyle,
   CandlestickSeries,
+  HistogramSeries,
   type IChartApi,
   type ISeriesApi,
   type CandlestickSeriesPartialOptions,
+  type HistogramSeriesPartialOptions,
   type Time,
 } from 'lightweight-charts';
 import type { Candle } from '@/types';
@@ -25,6 +27,7 @@ export function CandlestickChart({ candles, currentPrice, selectedStrike, onLoad
   const containerRef   = useRef<HTMLDivElement>(null);
   const chartRef       = useRef<IChartApi | null>(null);
   const candleRef      = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const volumeRef      = useRef<ISeriesApi<'Histogram'> | null>(null);
   const strikeLineRef  = useRef<ReturnType<ISeriesApi<'Candlestick'>['createPriceLine']> | null>(null);
   const initialScrollRef = useRef(false);
 
@@ -49,7 +52,7 @@ export function CandlestickChart({ candles, currentPrice, selectedStrike, onLoad
       },
       rightPriceScale: {
         borderColor:  'rgba(255,255,255,0.07)',
-        scaleMargins: { top: 0.08, bottom: 0.08 },
+        scaleMargins: { top: 0.08, bottom: 0.22 },
       },
       timeScale: {
         borderColor:    'rgba(255,255,255,0.07)',
@@ -81,8 +84,17 @@ export function CandlestickChart({ candles, currentPrice, selectedStrike, onLoad
       wickDownColor:   '#eb365a',
     } as CandlestickSeriesPartialOptions);
 
+    const volumeSeries = chart.addSeries(HistogramSeries, {
+      priceFormat:  { type: 'volume' },
+      priceScaleId: 'vol',
+    } as HistogramSeriesPartialOptions);
+    volumeSeries.priceScale().applyOptions({
+      scaleMargins: { top: 0.82, bottom: 0 },
+    });
+
     chartRef.current  = chart;
     candleRef.current = candleSeries;
+    volumeRef.current = volumeSeries;
 
     if (onLoadMore) {
       chart.timeScale().subscribeVisibleLogicalRangeChange(range => {
@@ -94,22 +106,26 @@ export function CandlestickChart({ candles, currentPrice, selectedStrike, onLoad
       chart.remove();
       chartRef.current  = null;
       candleRef.current = null;
+      volumeRef.current = null;
       initialScrollRef.current = false;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Feed candle data ───────────────────────────────────────────────────────
+  // ── Feed candle + volume data ──────────────────────────────────────────────
   useEffect(() => {
     if (!candleRef.current || candles.length === 0) return;
-    const data = candles.map(c => ({
-      time:  Math.floor(c.timestamp / 1000) as unknown as Time,
-      open:  c.open,
-      high:  c.high,
-      low:   c.low,
-      close: c.close,
-    }));
-    candleRef.current.setData(data);
+    const t = (c: Candle) => Math.floor(c.timestamp / 1000) as unknown as Time;
+    candleRef.current.setData(candles.map(c => ({
+      time: t(c), open: c.open, high: c.high, low: c.low, close: c.close,
+    })));
+    if (volumeRef.current) {
+      volumeRef.current.setData(candles.map(c => ({
+        time:  t(c),
+        value: c.volume,
+        color: c.close >= c.open ? 'rgba(2,199,123,0.35)' : 'rgba(235,54,90,0.35)',
+      })));
+    }
     // Only scroll to real time on the very first data load — after that the
     // user is free to navigate wherever they want without being snapped back.
     if (!initialScrollRef.current) {
