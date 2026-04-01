@@ -6,6 +6,10 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletReadyState } from '@solana/wallet-adapter-base';
 import { PRIVY_ENABLED, usePrivyReady } from '@/components/WalletProvider';
 
+// NOTE: PRIVY_ENABLED / PrivyConnectButton are kept for potential future use
+// but ConnectButton always renders AdapterConnectButton so that useWallet()
+// (used by anchor_client for all on-chain calls) is always the auth source.
+
 // ── Devnet USDC faucet ───────────────────────────────────────────────────────
 
 async function requestFaucet(wallet: string): Promise<string> {
@@ -277,13 +281,12 @@ function DropdownMenu({ children, onClose }: { children: React.ReactNode; onClos
 }
 
 // ── Public export ────────────────────────────────────────────────────────────
+// Always use the Solana wallet-adapter button.
+// anchor_client uses useWallet() for all on-chain calls, so Privy's wallet
+// state is irrelevant for trading — adapter is the only path that works.
 
 export function ConnectButton() {
-  const privyReady = usePrivyReady();
-  if (PRIVY_ENABLED && !privyReady) {
-    return <button disabled style={btnStyle({ muted: true })}>Loading…</button>;
-  }
-  return PRIVY_ENABLED ? <PrivyConnectButton /> : <AdapterConnectButton />;
+  return <AdapterConnectButton />;
 }
 
 // ── Shared styles ────────────────────────────────────────────────────────────
