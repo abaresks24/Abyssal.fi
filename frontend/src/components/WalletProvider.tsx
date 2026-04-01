@@ -19,9 +19,7 @@ import {
   TorusWalletAdapter,
   NightlyWalletAdapter,
 } from '@solana/wallet-adapter-wallets';
-import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import { SOLANA_RPC } from '@/lib/constants';
-import '@solana/wallet-adapter-react-ui/styles.css';
 
 interface Props { children: ReactNode; }
 
@@ -55,7 +53,7 @@ function SolanaAdapters({ children }: { children: ReactNode }) {
   return (
     <ConnectionProvider endpoint={SOLANA_RPC}>
       <WalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>{children}</WalletModalProvider>
+        {children}
       </WalletProvider>
     </ConnectionProvider>
   );
