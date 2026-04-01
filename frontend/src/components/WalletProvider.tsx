@@ -1,12 +1,12 @@
 'use client';
-import { type FC, type ReactNode, useMemo, useState, useEffect, createContext, useContext } from 'react';
+import { type FC, type ReactNode, useMemo, useState, useEffect, useRef, createContext, useContext } from 'react';
 
 // Privy — account abstraction + unified wallet modal
-import { PrivyProvider } from '@privy-io/react-auth';
-import { toSolanaWalletConnectors } from '@privy-io/react-auth/solana';
+import { PrivyProvider, usePrivy } from '@privy-io/react-auth';
+import { toSolanaWalletConnectors, useWallets } from '@privy-io/react-auth/solana';
 
-// Solana wallet adapter — kept for anchor_client compatibility
-import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
+// Solana wallet adapter — required by anchor_client
+import { ConnectionProvider, WalletProvider, useWallet } from '@solana/wallet-adapter-react';
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 import {
   PhantomWalletAdapter,
@@ -24,18 +24,64 @@ import { SOLANA_RPC } from '@/lib/constants';
 interface Props { children: ReactNode; }
 
 // Privy is enabled only when a real app ID is configured.
-// During local builds with the placeholder value, we skip Privy entirely
-// so `next build` doesn't throw during prerender.
 const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? '';
 export const PRIVY_ENABLED =
   PRIVY_APP_ID.length > 5 && !PRIVY_APP_ID.includes('YOUR_PRIVY');
 
 // Context that signals PrivyProvider is mounted and safe to call Privy hooks.
-// ConnectButton consumes this to avoid calling usePrivy() before the provider exists.
 export const PrivyReadyContext = createContext(false);
 export const usePrivyReady = () => useContext(PrivyReadyContext);
 
-// Solana adapter providers (shared regardless of Privy status)
+// ── Privy → Solana adapter bridge ────────────────────────────────────────────
+// When Privy connects an external wallet (Phantom, Solflare…), we call
+// select() + connect() on the matching Solana adapter so that useWallet()
+// (used by anchor_client for all on-chain calls) has the correct publicKey.
+//
+// The second connect() call does NOT show a popup: the wallet is already
+// unlocked/approved via Privy, so it returns immediately.
+
+function PrivyAdapterSync() {
+  const { authenticated } = usePrivy();
+  const { wallets: privyWallets } = useWallets();
+  const { wallets: adapterWallets, select, publicKey, connected, disconnect } = useWallet();
+  const syncedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    // ── Sync external wallet from Privy → adapter ──────────────────────────
+    const externalWallet = privyWallets.find(w => w.walletClientType !== 'privy');
+
+    if (authenticated && externalWallet) {
+      // Already synced for this wallet — skip
+      if (syncedRef.current === externalWallet.address) return;
+
+      // Find the matching adapter by name (e.g. 'phantom' → 'Phantom')
+      const adapterWallet = adapterWallets.find(w =>
+        w.adapter.name.toLowerCase() === externalWallet.walletClientType.toLowerCase()
+      );
+
+      if (adapterWallet) {
+        syncedRef.current = externalWallet.address;
+        select(adapterWallet.adapter.name as any);
+        // Wallet already approved by user via Privy — no popup will appear
+        adapterWallet.adapter.connect().catch(() => {
+          syncedRef.current = null;
+        });
+      }
+      return;
+    }
+
+    // ── Privy logged out → disconnect adapter ─────────────────────────────
+    if (!authenticated && connected) {
+      syncedRef.current = null;
+      disconnect();
+    }
+  }, [authenticated, privyWallets, adapterWallets, select, connected, disconnect, publicKey]);
+
+  return null;
+}
+
+// ── Solana adapter providers ──────────────────────────────────────────────────
+
 function SolanaAdapters({ children }: { children: ReactNode }) {
   const network = WalletAdapterNetwork.Devnet;
   const wallets = useMemo(() => [
@@ -59,13 +105,25 @@ function SolanaAdapters({ children }: { children: ReactNode }) {
   );
 }
 
+// ── Inner component — rendered inside both PrivyProvider and SolanaAdapters ──
+// Has access to both Privy hooks and Solana adapter hooks.
+
+function PrivyInner({ children }: { children: ReactNode }) {
+  return (
+    <>
+      <PrivyAdapterSync />
+      {children}
+    </>
+  );
+}
+
+// ── Root provider ─────────────────────────────────────────────────────────────
+
 export const WalletContextProvider: FC<Props> = ({ children }) => {
-  // Delay Privy initialisation to the client to avoid SSR prerender errors.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
   if (!mounted || !PRIVY_ENABLED) {
-    // SSR pass or no valid Privy app ID → Solana adapter only
     return (
       <PrivyReadyContext.Provider value={false}>
         <SolanaAdapters>{children}</SolanaAdapters>
@@ -96,7 +154,9 @@ export const WalletContextProvider: FC<Props> = ({ children }) => {
           },
         }}
       >
-        <SolanaAdapters>{children}</SolanaAdapters>
+        <SolanaAdapters>
+          <PrivyInner>{children}</PrivyInner>
+        </SolanaAdapters>
       </PrivyProvider>
     </PrivyReadyContext.Provider>
   );
