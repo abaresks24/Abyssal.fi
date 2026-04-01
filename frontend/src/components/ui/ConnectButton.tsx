@@ -1,10 +1,53 @@
 'use client';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { usePrivy, useLogout } from '@privy-io/react-auth';
 import { useWallets } from '@privy-io/react-auth/solana';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { PRIVY_ENABLED, usePrivyReady } from '@/components/WalletProvider';
+
+async function requestFaucet(wallet: string): Promise<string> {
+  const res = await fetch('/api/faucet', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ wallet }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? 'Faucet failed');
+  return data.signature as string;
+}
+
+function FaucetItem({ address, onClose }: { address: string; onClose: () => void }) {
+  const [state, setState] = useState<'idle' | 'loading' | 'ok' | 'err'>('idle');
+  const [msg, setMsg] = useState('');
+
+  const handleClick = useCallback(async () => {
+    setState('loading');
+    try {
+      await requestFaucet(address);
+      setState('ok');
+      setMsg('1 000 USDC sent!');
+      setTimeout(onClose, 1500);
+    } catch (e: any) {
+      setState('err');
+      setMsg(e?.message ?? 'Error');
+    }
+  }, [address, onClose]);
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={state === 'loading' || state === 'ok'}
+      style={{
+        ...menuItemStyle,
+        color: state === 'err' ? 'var(--red)' : state === 'ok' ? 'var(--green)' : 'var(--cyan)',
+        opacity: state === 'loading' ? 0.6 : 1,
+      }}
+    >
+      {state === 'loading' ? 'Sending…' : state === 'ok' || state === 'err' ? msg : 'Get devnet USDC'}
+    </button>
+  );
+}
 
 // ── Privy-powered button (only rendered when PRIVY_ENABLED) ─────────────────
 
@@ -60,6 +103,7 @@ function PrivyConnectButton() {
           <button onClick={() => { navigator.clipboard.writeText(address); setMenuOpen(false); }} style={menuItemStyle}>
             Copy address
           </button>
+          <FaucetItem address={address} onClose={() => setMenuOpen(false)} />
           <button onClick={() => { connectOrCreateWallet(); setMenuOpen(false); }} style={menuItemStyle}>
             Add wallet
           </button>
@@ -123,6 +167,7 @@ function AdapterConnectButton() {
           <button onClick={() => { navigator.clipboard.writeText(address); setMenuOpen(false); }} style={menuItemStyle}>
             Copy address
           </button>
+          <FaucetItem address={address} onClose={() => setMenuOpen(false)} />
           <button onClick={() => { disconnect(); setMenuOpen(false); }} style={{ ...menuItemStyle, color: 'var(--red)' }}>
             Disconnect
           </button>

@@ -63,7 +63,8 @@ pub fn handler(ctx: Context<InitializeVault>) -> Result<()> {
     vault.fees_collected = 0;
     vault.paused = false;
     vault.total_vlp_tokens = 0;
-    vault._padding = [0u8; 56];
+    vault.vlp_mint = Pubkey::default();
+    vault._padding = [0u8; 24];
 
     msg!(
         "PacificaOptions vault initialized. Authority: {}, Keeper: {}",

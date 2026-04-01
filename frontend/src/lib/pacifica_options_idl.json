@@ -222,7 +222,7 @@
         {
           "name": "amm_pool",
           "docs": [
-            "AMM pool for this options series"
+            "AMM pool for this options series — must be pre-created via ensure_series"
           ],
           "writable": true
         },
@@ -235,7 +235,7 @@
         {
           "name": "position",
           "docs": [
-            "New position account for the buyer"
+            "Position account — must be pre-created via ensure_series"
           ],
           "writable": true
         },
@@ -254,14 +254,6 @@
         {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        },
-        {
-          "name": "rent",
-          "address": "SysvarRent111111111111111111111111111111111"
         }
       ],
       "args": [
@@ -278,7 +270,7 @@
     {
       "name": "deposit_vault",
       "docs": [
-        "Deposit USDC into the global vault and receive vLP tokens"
+        "Deposit USDC into the global vault and receive vLP SPL tokens"
       ],
       "discriminator": [
         126,
@@ -342,7 +334,10 @@
           }
         },
         {
-          "name": "vlp_position",
+          "name": "vlp_mint",
+          "docs": [
+            "vLP SPL token mint (must match vault.vlp_mint)"
+          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -350,27 +345,14 @@
                 "kind": "const",
                 "value": [
                   118,
-                  97,
-                  117,
-                  108,
-                  116,
-                  95,
                   108,
                   112,
                   95,
-                  112,
-                  111,
-                  115,
+                  109,
                   105,
-                  116,
-                  105,
-                  111,
-                  110
+                  110,
+                  116
                 ]
-              },
-              {
-                "kind": "account",
-                "path": "depositor"
               },
               {
                 "kind": "account",
@@ -380,7 +362,103 @@
           }
         },
         {
+          "name": "depositor_vlp",
+          "docs": [
+            "Depositor's vLP ATA — created on first deposit"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "depositor"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vlp_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
           "name": "depositor_usdc",
+          "docs": [
+            "Depositor's USDC token account"
+          ],
           "writable": true
         },
         {
@@ -391,6 +469,10 @@
         {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
           "name": "system_program",
@@ -407,6 +489,84 @@
           "type": {
             "defined": {
               "name": "DepositVaultArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ensure_series",
+      "docs": [
+        "Initialize AMM pool and position PDAs for a (user, series) pair.",
+        "Call once per series before the first buy_option. Idempotent."
+      ],
+      "discriminator": [
+        83,
+        70,
+        133,
+        234,
+        20,
+        75,
+        245,
+        31
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "amm_pool",
+          "docs": [
+            "AMM pool for this options series"
+          ],
+          "writable": true
+        },
+        {
+          "name": "position",
+          "docs": [
+            "Position account for (payer, series)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "EnsureSeriesArgs"
             }
           }
         }
@@ -725,6 +885,90 @@
           "docs": [
             "Keeper address (can be same as authority initially)"
           ]
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_vlp_mint",
+      "docs": [
+        "Initialize the vLP SPL token mint (authority-only, called once after vault init)"
+      ],
+      "discriminator": [
+        75,
+        178,
+        184,
+        169,
+        197,
+        185,
+        91,
+        155
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vlp_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  108,
+                  112,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
         },
         {
           "name": "token_program",
@@ -1301,7 +1545,7 @@
     {
       "name": "withdraw_vault",
       "docs": [
-        "Burn vLP tokens and withdraw proportional USDC from the global vault"
+        "Burn vLP SPL tokens and withdraw proportional USDC from the global vault"
       ],
       "discriminator": [
         135,
@@ -1365,7 +1609,10 @@
           }
         },
         {
-          "name": "vlp_position",
+          "name": "vlp_mint",
+          "docs": [
+            "vLP SPL token mint"
+          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -1373,27 +1620,14 @@
                 "kind": "const",
                 "value": [
                   118,
-                  97,
-                  117,
-                  108,
-                  116,
-                  95,
                   108,
                   112,
                   95,
-                  112,
-                  111,
-                  115,
+                  109,
                   105,
-                  116,
-                  105,
-                  111,
-                  110
+                  110,
+                  116
                 ]
-              },
-              {
-                "kind": "account",
-                "path": "withdrawer"
               },
               {
                 "kind": "account",
@@ -1403,7 +1637,103 @@
           }
         },
         {
+          "name": "withdrawer_vlp",
+          "docs": [
+            "Withdrawer's vLP ATA — must hold at least args.vlp_tokens"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "withdrawer"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vlp_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
           "name": "withdrawer_usdc",
+          "docs": [
+            "Withdrawer's USDC token account (receives USDC)"
+          ],
           "writable": true
         },
         {
@@ -1414,6 +1744,10 @@
         {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         }
       ],
       "args": [
@@ -1492,19 +1826,6 @@
         85,
         29,
         36
-      ]
-    },
-    {
-      "name": "VaultLPPosition",
-      "discriminator": [
-        228,
-        199,
-        57,
-        86,
-        55,
-        163,
-        57,
-        196
       ]
     }
   ],
@@ -1701,21 +2022,26 @@
     },
     {
       "code": 6035,
+      "name": "InvalidSeries",
+      "msg": "Series accounts not initialized: call ensure_series first"
+    },
+    {
+      "code": 6036,
       "name": "MarketNotSupported",
       "msg": "Market is not supported"
     },
     {
-      "code": 6036,
+      "code": 6037,
       "name": "NegativeSqrtInput",
       "msg": "Square root input is negative"
     },
     {
-      "code": 6037,
+      "code": 6038,
       "name": "LogNonPositive",
       "msg": "Logarithm input must be positive"
     },
     {
-      "code": 6038,
+      "code": 6039,
       "name": "U64Overflow",
       "msg": "Value exceeds u64 maximum"
     }
@@ -1945,16 +2271,43 @@
           {
             "name": "usdc_amount",
             "docs": [
-              "USDC amount to deposit, 6 dec"
+              "USDC amount to deposit (6 dec)"
             ],
             "type": "u64"
           },
           {
             "name": "min_vlp_tokens",
             "docs": [
-              "Minimum vLP tokens expected (slippage protection, use 0 to skip)"
+              "Minimum vLP tokens expected — slippage guard (0 = no check)"
             ],
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EnsureSeriesArgs",
+      "docs": [
+        "Args mirror BuyOptionArgs so the seeds can be derived identically."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_discriminant",
+            "type": "u8"
+          },
+          {
+            "name": "option_type",
+            "type": "u8"
+          },
+          {
+            "name": "strike",
+            "type": "u64"
+          },
+          {
+            "name": "expiry",
+            "type": "i64"
           }
         ]
       }
@@ -2507,10 +2860,17 @@
           {
             "name": "total_vlp_tokens",
             "docs": [
-              "Total vLP tokens in circulation (global vault LP shares)",
-              "Stored in the first 8 bytes of the former _padding field"
+              "Total vLP tokens in circulation (global vault LP shares)"
             ],
             "type": "u64"
+          },
+          {
+            "name": "vlp_mint",
+            "docs": [
+              "SPL token mint for vLP tokens (set by initialize_vlp_mint)",
+              "Pubkey::default() until initialized"
+            ],
+            "type": "pubkey"
           },
           {
             "name": "_padding",
@@ -2520,7 +2880,7 @@
             "type": {
               "array": [
                 "u8",
-                56
+                24
               ]
             }
           }
@@ -2749,56 +3109,6 @@
       }
     },
     {
-      "name": "VaultLPPosition",
-      "docs": [
-        "Global vault LP position — tracks a user's vLP share tokens"
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "bump",
-            "type": "u8"
-          },
-          {
-            "name": "owner",
-            "type": "pubkey"
-          },
-          {
-            "name": "vault",
-            "type": "pubkey"
-          },
-          {
-            "name": "vlp_tokens",
-            "docs": [
-              "vLP tokens held by this user"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "usdc_deposited",
-            "docs": [
-              "Cumulative USDC deposited (cost basis tracking)"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "created_at",
-            "type": "i64"
-          },
-          {
-            "name": "_padding",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          }
-        ]
-      }
-    },
-    {
       "name": "WithdrawVaultArgs",
       "type": {
         "kind": "struct",
@@ -2806,14 +3116,14 @@
           {
             "name": "vlp_tokens",
             "docs": [
-              "vLP tokens to burn"
+              "vLP tokens to burn (6 dec)"
             ],
             "type": "u64"
           },
           {
             "name": "min_usdc_out",
             "docs": [
-              "Minimum USDC to receive (slippage protection, use 0 to skip)"
+              "Minimum USDC to receive — slippage guard (0 = no check)"
             ],
             "type": "u64"
           }

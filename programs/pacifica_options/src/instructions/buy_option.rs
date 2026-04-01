@@ -39,7 +39,7 @@ pub struct BuyOption<'info> {
     )]
     pub usdc_vault: Box<Account<'info, TokenAccount>>,
 
-    /// AMM pool for this options series
+    /// AMM pool for this options series — must be pre-created via ensure_series
     #[account(
         mut,
         seeds = [
@@ -50,8 +50,8 @@ pub struct BuyOption<'info> {
             &args.strike.to_le_bytes(),
             &args.expiry.to_le_bytes(),
         ],
-        bump = amm_pool.bump,
-        constraint = amm_pool.vault == vault.key()
+        bump,
+        constraint = amm_pool.vault == vault.key() @ crate::error::OptionsError::InvalidSeries,
     )]
     pub amm_pool: Box<Account<'info, AmmPool>>,
 
@@ -63,11 +63,9 @@ pub struct BuyOption<'info> {
     )]
     pub iv_oracle: Box<Account<'info, IVOracle>>,
 
-    /// New position account for the buyer
+    /// Position account — must be pre-created via ensure_series
     #[account(
-        init,
-        payer = buyer,
-        space = OptionPosition::LEN,
+        mut,
         seeds = [
             b"position",
             buyer.key().as_ref(),
@@ -77,7 +75,8 @@ pub struct BuyOption<'info> {
             &args.strike.to_le_bytes(),
             &args.expiry.to_le_bytes(),
         ],
-        bump
+        bump,
+        constraint = position.owner == buyer.key() @ crate::error::OptionsError::InvalidSeries,
     )]
     pub position: Box<Account<'info, OptionPosition>>,
 
@@ -93,8 +92,6 @@ pub struct BuyOption<'info> {
     pub buyer: Signer<'info>,
 
     pub token_program: Program<'info, Token>,
-    pub system_program: Program<'info, System>,
-    pub rent: Sysvar<'info, Rent>,
 }
 
 pub fn handler(ctx: Context<BuyOption>, args: BuyOptionArgs) -> Result<()> {
@@ -236,37 +233,33 @@ pub fn handler(ctx: Context<BuyOption>, args: BuyOptionArgs) -> Result<()> {
         .ok_or(OptionsError::MathOverflow)?;
     vault.fees_collected = vault.fees_collected.saturating_add(fee);
 
-    // ── Update AMM pool reserves ─────────────────────────────────────────────
-    // AMM pool tracks secondary market; primary issuance goes directly to vault
-    // For AMM: add options to reserve, add net premium to USDC reserve
-    let pool = &mut ctx.accounts.amm_pool;
-    pool.reserve_usdc = pool.reserve_usdc
-        .checked_add(total_premium)
-        .ok_or(OptionsError::MathOverflow)?;
-    // Buyer takes options from the pool's reserve
-    pool.reserve_options = pool.reserve_options.saturating_sub(args.size);
-    // Update k invariant
-    let new_k = (pool.reserve_options as u128)
-        .saturating_mul(pool.reserve_usdc as u128);
-    pool.set_k_invariant(new_k);
+    // ── Accumulate AMM pool reserves (tracking protocol volume) ─────────────
+    {
+        let pool = &mut ctx.accounts.amm_pool;
+        pool.reserve_usdc = pool.reserve_usdc
+            .checked_add(total_premium)
+            .ok_or(OptionsError::MathOverflow)?;
+        pool.reserve_options = pool.reserve_options.saturating_add(args.size);
+        let new_k = (pool.reserve_options as u128).saturating_mul(pool.reserve_usdc as u128);
+        pool.set_k_invariant(new_k);
+    }
 
-    // ── Create position ──────────────────────────────────────────────────────
-    let position = &mut ctx.accounts.position;
-    position.bump = ctx.bumps.position;
-    position.owner = ctx.accounts.buyer.key();
-    position.vault = ctx.accounts.vault.key();
-    position.market = market;
-    position.option_type = option_type;
-    position.strike = args.strike;
-    position.expiry = args.expiry;
-    position.size = args.size;
-    position.premium_paid = total_premium;
-    position.entry_iv = iv;
-    position.entry_delta = delta;
-    position.settled = false;
-    position.payoff_received = 0;
-    position.created_at = now;
-    position._padding = [0u8; 32];
+    // ── Accumulate position ───────────────────────────────────────────────────
+    // First buy: update entry_iv / entry_delta (position seeded with 0s by ensure_series)
+    {
+        let position = &mut ctx.accounts.position;
+        if position.size == 0 {
+            position.entry_iv    = iv;
+            position.entry_delta = delta;
+            position.created_at  = now;
+        }
+        position.size = position.size
+            .checked_add(args.size)
+            .ok_or(OptionsError::MathOverflow)?;
+        position.premium_paid = position.premium_paid
+            .checked_add(total_premium)
+            .ok_or(OptionsError::MathOverflow)?;
+    }
 
     msg!(
         "Option purchased: {:?} {:?} strike={} expiry={} size={} premium={} fee={}",

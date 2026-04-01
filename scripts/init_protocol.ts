@@ -69,6 +69,13 @@ function ivOraclePDA(vault: PublicKey, disc: number): [PublicKey, number] {
   );
 }
 
+function vlpMintPDA(vault: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from('vlp_mint'), vault.toBuffer()],
+    PROGRAM_ID,
+  );
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -98,8 +105,10 @@ async function main() {
   console.log('═══════════════════════════════════════════════');
   console.log(`  Authority : ${authority.publicKey.toBase58()}`);
   console.log(`  Program   : ${PROGRAM_ID.toBase58()}`);
+  const [vlpMint] = vlpMintPDA(vault);
   console.log(`  Vault PDA : ${vault.toBase58()}`);
   console.log(`  USDC vault: ${vaultUsdc.toBase58()}`);
+  console.log(`  vLP mint  : ${vlpMint.toBase58()}`);
   console.log('───────────────────────────────────────────────\n');
 
   // ── 1. Initialize Vault ────────────────────────────────────────────────────
@@ -125,7 +134,32 @@ async function main() {
     console.log(`  ✓ Vault initialized  tx: ${tx}\n`);
   }
 
-  // ── 2-4. Initialize IV Oracles ─────────────────────────────────────────────
+  // ── 2. Initialize vLP SPL Mint ────────────────────────────────────────────
+
+  const vaultState = await (program.account as any).optionVault.fetch(vault);
+  const vlpMintAlreadySet =
+    vaultState.vlpMint.toBase58() !== '11111111111111111111111111111111';
+
+  if (vlpMintAlreadySet) {
+    console.log(`[2/${MARKETS.length + 2}] vLP mint already initialized ✓  ${vlpMint.toBase58()}`);
+  } else {
+    console.log(`[2/${MARKETS.length + 2}] Initializing vLP SPL mint...`);
+    const tx = await program.methods
+      .initializeVlpMint()
+      .accounts({
+        vault,
+        vlpMint,
+        authority: authority.publicKey,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: web3.SystemProgram.programId,
+        rent: web3.SYSVAR_RENT_PUBKEY,
+      } as any)
+      .rpc();
+    console.log(`  ✓ vLP mint: ${vlpMint.toBase58()}`);
+    console.log(`     tx: ${tx}\n`);
+  }
+
+  // ── 3-N. Initialize IV Oracles ────────────────────────────────────────────
 
   for (let i = 0; i < MARKETS.length; i++) {
     const { name, disc } = MARKETS[i];
@@ -133,9 +167,9 @@ async function main() {
 
     const oracleInfo = await connection.getAccountInfo(oracle);
     if (oracleInfo) {
-      console.log(`[${i + 2}/${MARKETS.length + 1}] ${name} oracle already initialized ✓  ${oracle.toBase58()}`);
+      console.log(`[${i + 3}/${MARKETS.length + 2}] ${name} oracle already initialized ✓  ${oracle.toBase58()}`);
     } else {
-      console.log(`[${i + 2}/${MARKETS.length + 1}] Initializing ${name} IV oracle...`);
+      console.log(`[${i + 3}/${MARKETS.length + 2}] Initializing ${name} IV oracle...`);
       const tx = await program.methods
         .initializeIvOracle(disc)
         .accounts({
@@ -158,14 +192,17 @@ async function main() {
   console.log(`  Program:     ${PROGRAM_ID.toBase58()}`);
   console.log(`  Vault:       ${vault.toBase58()}`);
   console.log(`  Vault USDC:  ${vaultUsdc.toBase58()}`);
+  console.log(`  vLP Mint:    ${vlpMint.toBase58()}`);
   for (const { name, disc } of MARKETS) {
     const [oracle] = ivOraclePDA(vault, disc);
     console.log(`  ${name} Oracle:   ${oracle.toBase58()}`);
   }
   console.log('\n  Next steps:');
-  console.log('  1. Start the IV engine:  cd iv_engine && python main.py');
-  console.log('  2. Start the frontend:   cd frontend && npm run dev');
-  console.log('  3. Initialize AMM pools via the frontend Liquidity tab');
+  console.log('  1. Add AUTHORITY_KEYPAIR=[...] to frontend/.env.local');
+  console.log('  2. Start the IV engine:  cd iv_engine && python main.py');
+  console.log('  3. Start the frontend:   cd frontend && npm run dev');
+  console.log('  4. Use "Get devnet USDC" in wallet menu to fund wallets');
+  console.log('  5. Deposit into vault via LP Vault tab — receive vLP SPL tokens');
   console.log('═══════════════════════════════════════════════\n');
 }
 

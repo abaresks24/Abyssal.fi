@@ -6,6 +6,7 @@ pub mod math;
 pub mod instructions;
 
 use instructions::initialize_vault::*;
+use instructions::ensure_series::*;
 use instructions::update_iv_params::*;
 use instructions::buy_option::*;
 use instructions::sell_option::*;
@@ -89,6 +90,12 @@ pub mod pacifica_options {
 
     // ── User Trading ─────────────────────────────────────────────────────────
 
+    /// Initialize AMM pool and position PDAs for a (user, series) pair.
+    /// Call once per series before the first buy_option. Idempotent.
+    pub fn ensure_series(ctx: Context<EnsureSeries>, args: EnsureSeriesArgs) -> Result<()> {
+        instructions::ensure_series::handler(ctx, args)
+    }
+
     /// Buy an option (platform fee = 5 bps applied on top of BS premium)
     pub fn buy_option(ctx: Context<BuyOption>, args: BuyOptionArgs) -> Result<()> {
         instructions::buy_option::handler(ctx, args)
@@ -126,12 +133,17 @@ pub mod pacifica_options {
 
     // ── Global Vault LP ───────────────────────────────────────────────────────
 
-    /// Deposit USDC into the global vault and receive vLP tokens
+    /// Initialize the vLP SPL token mint (authority-only, called once after vault init)
+    pub fn initialize_vlp_mint(ctx: Context<InitializeVlpMint>) -> Result<()> {
+        instructions::vault_liquidity::initialize_vlp_mint(ctx)
+    }
+
+    /// Deposit USDC into the global vault and receive vLP SPL tokens
     pub fn deposit_vault(ctx: Context<DepositVault>, args: DepositVaultArgs) -> Result<()> {
         instructions::vault_liquidity::deposit_vault(ctx, args)
     }
 
-    /// Burn vLP tokens and withdraw proportional USDC from the global vault
+    /// Burn vLP SPL tokens and withdraw proportional USDC from the global vault
     pub fn withdraw_vault(ctx: Context<WithdrawVault>, args: WithdrawVaultArgs) -> Result<()> {
         instructions::vault_liquidity::withdraw_vault(ctx, args)
     }

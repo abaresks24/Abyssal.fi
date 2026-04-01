@@ -80,11 +80,14 @@ pub struct OptionVault {
     pub paused: bool,
 
     /// Total vLP tokens in circulation (global vault LP shares)
-    /// Stored in the first 8 bytes of the former _padding field
     pub total_vlp_tokens: u64,
 
+    /// SPL token mint for vLP tokens (set by initialize_vlp_mint)
+    /// Pubkey::default() until initialized
+    pub vlp_mint: Pubkey,
+
     /// Reserved space for future fields
-    pub _padding: [u8; 56],
+    pub _padding: [u8; 24],
 }
 
 impl OptionVault {
@@ -102,5 +105,6 @@ impl OptionVault {
         + 8   // fees_collected
         + 1   // paused
         + 8   // total_vlp_tokens
-        + 56; // padding
+        + 32  // vlp_mint
+        + 24; // padding
 }

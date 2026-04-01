@@ -3,11 +3,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey } from '@solana/web3.js';
 import { useVaultStats } from '@/hooks/useVaultStats';
-import { PacificaOptionsClient } from '@/lib/anchor_client';
+import { PacificaOptionsClient, findVlpMintPDA } from '@/lib/anchor_client';
 import { VAULT_AUTHORITY } from '@/lib/constants';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
-
-const SCALE = 1_000_000;
 
 function fmt(n: number, d = 2) {
   return n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -46,45 +44,44 @@ export function LPVault() {
   const [txSig, setTxSig] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  // User's vLP position
-  const [vlpTokens, setVlpTokens] = useState(0);
-  const [usdcDeposited, setUsdcDeposited] = useState(0);
-  const [posLoading, setPosLoading] = useState(false);
+  // User's vLP SPL token balance (raw, in vLP units)
+  const [vlpBalance, setVlpBalance] = useState(0);
+  const [balLoading, setBalLoading] = useState(false);
 
   const totalCollateral = stats.totalCollateral;
   const totalVlpTokens  = stats.totalVlpTokens;
 
   // vLP price = total_collateral / total_vlp_tokens (USDC per vLP)
   const vlpPrice = totalVlpTokens > 0 ? totalCollateral / totalVlpTokens : 1;
-  const userValueUsdc = vlpTokens * vlpPrice;
-  const unrealizedPnl = userValueUsdc - usdcDeposited;
+  const userValueUsdc = vlpBalance * vlpPrice;
   const utilization = totalCollateral > 0
     ? (stats.openInterest / totalCollateral) * 100
     : 0;
 
-  const fetchPosition = useCallback(async () => {
-    if (!wallet.publicKey) { setVlpTokens(0); setUsdcDeposited(0); return; }
-    setPosLoading(true);
+  // vLP mint address for display
+  const vlpMintAddress = (() => {
     try {
-      const client = new PacificaOptionsClient(wallet);
+      const [mint] = findVlpMintPDA(new PublicKey(VAULT_AUTHORITY));
+      return mint.toBase58();
+    } catch { return null; }
+  })();
+
+  const fetchBalance = useCallback(async () => {
+    if (!wallet.publicKey) { setVlpBalance(0); return; }
+    setBalLoading(true);
+    try {
+      const client    = new PacificaOptionsClient(wallet);
       const authority = new PublicKey(VAULT_AUTHORITY);
-      const pos = await client.getVaultLPPosition(authority);
-      if (pos) {
-        setVlpTokens((pos.vlpTokens as any).toNumber() / SCALE);
-        setUsdcDeposited((pos.usdcDeposited as any).toNumber() / SCALE);
-      } else {
-        setVlpTokens(0);
-        setUsdcDeposited(0);
-      }
+      const bal = await client.getVlpBalance(authority);
+      setVlpBalance(bal);
     } catch {
-      setVlpTokens(0);
-      setUsdcDeposited(0);
+      setVlpBalance(0);
     } finally {
-      setPosLoading(false);
+      setBalLoading(false);
     }
   }, [wallet]);
 
-  useEffect(() => { fetchPosition(); }, [fetchPosition]);
+  useEffect(() => { fetchBalance(); }, [fetchBalance]);
 
   const handleSubmit = async () => {
     if (!wallet.publicKey || !amount) return;
@@ -102,13 +99,13 @@ export function LPVault() {
       if (tab === 'deposit') {
         sig = await client.depositVault({ vaultAuthority: authority, usdcAmount: val });
       } else {
-        // Convert USDC value to vLP tokens to burn
-        const vlpToWithdraw = vlpPrice > 0 ? val / vlpPrice : 0;
-        sig = await client.withdrawVault({ vaultAuthority: authority, vlpTokens: vlpToWithdraw });
+        // User enters USDC value to withdraw; convert to vLP tokens to burn
+        const vlpToBurn = vlpPrice > 0 ? val / vlpPrice : 0;
+        sig = await client.withdrawVault({ vaultAuthority: authority, vlpTokens: vlpToBurn });
       }
       setTxSig(sig);
       setAmount('');
-      await fetchPosition();
+      await fetchBalance();
     } catch (e: any) {
       setErr(e?.message ?? 'Transaction failed');
     } finally {
@@ -153,7 +150,7 @@ export function LPVault() {
             background: 'rgba(85,195,233,0.12)', color: 'var(--cyan)',
             border: '1px solid rgba(85,195,233,0.25)', fontWeight: 600,
           }}>
-            vLP — Global Vault Shares
+            vLP — Transferable SPL Token
           </div>
         )}
       </div>
@@ -250,6 +247,18 @@ export function LPVault() {
             />
           </div>
 
+          {tab === 'withdraw' && vlpBalance > 0 && (
+            <button
+              onClick={() => setAmount(fmt(userValueUsdc, 2).replace(/,/g, ''))}
+              style={{
+                fontSize: 11, color: 'var(--cyan)', background: 'none', border: 'none',
+                cursor: 'pointer', padding: '0 0 12px 0', textDecoration: 'underline',
+              }}
+            >
+              Max: ${fmt(userValueUsdc)}
+            </button>
+          )}
+
           {previewVlp !== null && amount && (
             <div style={{
               background: 'rgba(85,195,233,0.06)',
@@ -338,7 +347,7 @@ export function LPVault() {
           )}
         </div>
 
-        {/* Right column: position + explainer */}
+        {/* Right column: position + token info + explainer */}
         <div style={{ width: isMobile ? '100%' : 300, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
 
           {/* User position */}
@@ -353,24 +362,18 @@ export function LPVault() {
             </div>
             {!wallet.publicKey ? (
               <div style={{ fontSize: 12, color: 'var(--text3)' }}>Connect wallet to view your position.</div>
-            ) : posLoading ? (
+            ) : balLoading ? (
               <div style={{ fontSize: 12, color: 'var(--text3)' }}>Loading...</div>
-            ) : vlpTokens === 0 ? (
+            ) : vlpBalance === 0 ? (
               <div style={{ fontSize: 12, color: 'var(--text3)' }}>No position yet. Deposit USDC to get started.</div>
             ) : (
               <>
                 {([
-                  { label: 'vLP Balance',    value: `${fmt(vlpTokens, 4)} vLP`, accent: 'var(--cyan)' as const },
-                  { label: 'Current Value',  value: `$${fmt(userValueUsdc)}` },
-                  { label: 'Cost Basis',     value: `$${fmt(usdcDeposited)}` },
-                  {
-                    label: 'Unrealized PnL',
-                    value: `${unrealizedPnl >= 0 ? '+' : ''}$${fmt(unrealizedPnl)}`,
-                    accent: (unrealizedPnl >= 0 ? 'var(--green)' : 'var(--red)') as string,
-                  },
+                  { label: 'vLP Balance',   value: `${fmt(vlpBalance, 4)} vLP`, accent: 'var(--cyan)' as const },
+                  { label: 'Current Value', value: `$${fmt(userValueUsdc)}` },
                   {
                     label: 'Share of Vault',
-                    value: totalVlpTokens > 0 ? `${fmt((vlpTokens / totalVlpTokens) * 100, 4)}%` : '—',
+                    value: totalVlpTokens > 0 ? `${fmt((vlpBalance / totalVlpTokens) * 100, 4)}%` : '—',
                   },
                 ] as { label: string; value: string; accent?: string }[]).map(({ label, value, accent }) => (
                   <div key={label} style={{
@@ -387,6 +390,34 @@ export function LPVault() {
             )}
           </div>
 
+          {/* vLP Token info */}
+          {vlpMintAddress && (
+            <div style={{
+              background: 'var(--bg2)',
+              border: '1px solid rgba(85,195,233,0.2)',
+              borderRadius: 8,
+              padding: '14px 18px',
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--cyan)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                vLP SPL Token
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', wordBreak: 'break-all', marginBottom: 8 }}>
+                {vlpMintAddress}
+              </div>
+              <a
+                href={`https://solscan.io/token/${vlpMintAddress}?cluster=devnet`}
+                target="_blank"
+                rel="noreferrer"
+                style={{ fontSize: 11, color: 'var(--cyan)', textDecoration: 'none' }}
+              >
+                View on Solscan ↗
+              </a>
+              <span style={{ fontSize: 10, color: 'var(--text3)', display: 'block', marginTop: 6 }}>
+                Visible in Phantom · transferable wallet-to-wallet
+              </span>
+            </div>
+          )}
+
           {/* How it works */}
           <div style={{
             background: 'var(--bg2)',
@@ -398,10 +429,11 @@ export function LPVault() {
               How vLP Works
             </div>
             {[
-              'Deposit USDC → receive vLP tokens (your share of the vault).',
+              'Deposit USDC → receive vLP SPL tokens (visible in Phantom, transferable).',
               'The vault underwrites all options. Premiums collected increase the vLP price.',
               'vLP price = Total Collateral ÷ Total vLP Supply.',
-              'Withdrawals are subject to a solvency check (120% OI coverage requirement).',
+              'To withdraw: burn vLP tokens → receive proportional USDC.',
+              'Withdrawals are subject to a solvency check (120% OI coverage).',
             ].map((t, i) => (
               <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8, fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>
                 <span style={{ color: 'var(--cyan)', flexShrink: 0, fontWeight: 700 }}>•</span>

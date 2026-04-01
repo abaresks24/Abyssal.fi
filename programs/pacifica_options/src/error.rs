@@ -116,6 +116,9 @@ pub enum OptionsError {
     #[msg("Unknown market identifier")]
     UnknownMarket,
 
+    #[msg("Series accounts not initialized: call ensure_series first")]
+    InvalidSeries,
+
     #[msg("Market is not supported")]
     MarketNotSupported,
 

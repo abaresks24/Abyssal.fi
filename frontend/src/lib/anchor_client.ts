@@ -16,6 +16,7 @@ import {
 } from '@solana/web3.js';
 import {
   TOKEN_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
   getAssociatedTokenAddress,
 } from '@solana/spl-token';
 import type { WalletContextState } from '@solana/wallet-adapter-react';
@@ -116,6 +117,13 @@ export function findVaultLPPositionPDA(owner: PublicKey, vault: PublicKey): [Pub
   );
 }
 
+export function findVlpMintPDA(vault: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from('vlp_mint'), vault.toBuffer()],
+    PROGRAM_PUBKEY,
+  );
+}
+
 // ── Client ────────────────────────────────────────────────────────────────────
 
 export class PacificaOptionsClient {
@@ -208,7 +216,50 @@ export class PacificaOptionsClient {
     }
   }
 
+  // ── Ensure Series ───────────────────────────────────────────────────────────
+  // Idempotent: initializes ammPool + position PDAs for (user, series).
+  // Must be called before the first buyOption for a given series.
+
+  async ensureSeries(params: {
+    vaultAuthority: PublicKey;
+    market: Market;
+    optionType: OptionType;
+    strikeUsdc: number;
+    expiry: number;
+  }): Promise<string> {
+    if (!this.wallet.publicKey) throw new Error('Wallet not connected');
+    const payer = this.wallet.publicKey;
+
+    const marketDisc  = MARKET_DISCRIMINANTS[params.market];
+    const optTypeDisc = OPTION_TYPE_DISCRIMINANTS[params.optionType];
+    const strike      = new BN(Math.round(params.strikeUsdc * SCALE));
+    const expiry      = new BN(params.expiry);
+
+    const [vault]    = findVaultPDA(params.vaultAuthority);
+    const [ammPool]  = findAmmPoolPDA(vault, marketDisc, optTypeDisc, strike, expiry);
+    const [position] = findPositionPDA(payer, vault, marketDisc, optTypeDisc, strike, expiry);
+
+    return await this.program.methods
+      .ensureSeries({
+        marketDiscriminant: marketDisc,
+        optionType: optTypeDisc,
+        strike,
+        expiry,
+      })
+      .accounts({
+        vault,
+        ammPool,
+        position,
+        payer,
+        systemProgram: SystemProgram.programId,
+        rent: SYSVAR_RENT_PUBKEY,
+      } as any)
+      .rpc();
+  }
+
   // ── Buy Option ──────────────────────────────────────────────────────────────
+  // Automatically calls ensureSeries first if the ammPool or position PDAs
+  // don't exist yet (first trade for this series/user).
 
   async buyOption(params: {
     vaultAuthority: PublicKey;
@@ -229,12 +280,21 @@ export class PacificaOptionsClient {
     const size        = new BN(Math.round(params.sizeUnderlying * SCALE));
     const maxPremium  = new BN(Math.round(params.maxPremiumUsdc * SCALE));
 
-    const [vault]    = findVaultPDA(params.vaultAuthority);
+    const [vault]     = findVaultPDA(params.vaultAuthority);
     const [usdcVault] = findVaultUsdcPDA(vault);
     const [ivOracle]  = findIVOraclePDA(vault, marketDisc);
     const [ammPool]   = findAmmPoolPDA(vault, marketDisc, optTypeDisc, strike, expiry);
     const [position]  = findPositionPDA(buyer, vault, marketDisc, optTypeDisc, strike, expiry);
     const buyerUsdc   = await getAssociatedTokenAddress(USDC_MINT_PUBKEY, buyer);
+
+    // Check if the series PDAs already exist; if not, initialize them first.
+    const [ammInfo, posInfo] = await Promise.all([
+      this.program.provider.connection.getAccountInfo(ammPool),
+      this.program.provider.connection.getAccountInfo(position),
+    ]);
+    if (!ammInfo || !posInfo) {
+      await this.ensureSeries(params);
+    }
 
     return await this.program.methods
       .buyOption({
@@ -254,8 +314,6 @@ export class PacificaOptionsClient {
         buyerUsdc,
         buyer,
         tokenProgram: TOKEN_PROGRAM_ID,
-        systemProgram: SystemProgram.programId,
-        rent: SYSVAR_RENT_PUBKEY,
       } as any)
       .rpc();
   }
@@ -529,17 +587,48 @@ export class PacificaOptionsClient {
       .rpc();
   }
 
-  // ── Global Vault LP ─────────────────────────────────────────────────────────
+  // ── Global Vault LP (SPL token) ─────────────────────────────────────────────
 
-  async getVaultLPPosition(vaultAuthority: PublicKey) {
-    if (!this.wallet.publicKey) return null;
-    const [vault] = findVaultPDA(vaultAuthority);
-    const [vlpPosition] = findVaultLPPositionPDA(this.wallet.publicKey, vault);
+  /** Returns the user's vLP SPL token balance (0 if no ATA yet). */
+  async getVlpBalance(vaultAuthority: PublicKey): Promise<number> {
+    if (!this.wallet.publicKey) return 0;
+    const [vault]    = findVaultPDA(vaultAuthority);
+    const [vlpMint]  = findVlpMintPDA(vault);
+    const userVlpAta = await getAssociatedTokenAddress(vlpMint, this.wallet.publicKey);
     try {
-      return await this.program.account.vaultLpPosition.fetch(vlpPosition);
+      const bal = await this.connection.getTokenAccountBalance(userVlpAta);
+      return parseFloat(bal.value.uiAmountString ?? '0');
     } catch {
-      return null;
+      return 0;
     }
+  }
+
+  /** Returns the vLP mint pubkey stored in the vault (null if not initialized). */
+  async getVlpMint(vaultAuthority: PublicKey): Promise<PublicKey | null> {
+    const vault = await this.getVaultState(vaultAuthority);
+    if (!vault) return null;
+    const mint = vault.vlpMint as PublicKey;
+    if (mint.equals(PublicKey.default)) return null;
+    return mint;
+  }
+
+  /** Authority-only: creates the vLP SPL mint (call once after vault init). */
+  async initializeVlpMint(params: { vaultAuthority: PublicKey }): Promise<string> {
+    if (!this.wallet.publicKey) throw new Error('Wallet not connected');
+    const [vault]   = findVaultPDA(params.vaultAuthority);
+    const [vlpMint] = findVlpMintPDA(vault);
+
+    return await this.program.methods
+      .initializeVlpMint()
+      .accounts({
+        vault,
+        vlpMint,
+        authority: this.wallet.publicKey,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        rent: SYSVAR_RENT_PUBKEY,
+      } as any)
+      .rpc();
   }
 
   async depositVault(params: {
@@ -550,25 +639,28 @@ export class PacificaOptionsClient {
     if (!this.wallet.publicKey) throw new Error('Wallet not connected');
     const depositor = this.wallet.publicKey;
 
-    const [vault]      = findVaultPDA(params.vaultAuthority);
-    const [usdcVault]  = findVaultUsdcPDA(vault);
-    const [vlpPosition] = findVaultLPPositionPDA(depositor, vault);
+    const [vault]       = findVaultPDA(params.vaultAuthority);
+    const [usdcVault]   = findVaultUsdcPDA(vault);
+    const [vlpMint]     = findVlpMintPDA(vault);
     const depositorUsdc = await getAssociatedTokenAddress(USDC_MINT_PUBKEY, depositor);
+    const depositorVlp  = await getAssociatedTokenAddress(vlpMint, depositor);
 
     return await this.program.methods
       .depositVault({
-        usdcAmount: new BN(Math.round(params.usdcAmount * SCALE)),
+        usdcAmount:   new BN(Math.round(params.usdcAmount * SCALE)),
         minVlpTokens: new BN(Math.round((params.minVlpTokens ?? 0) * SCALE)),
       })
       .accounts({
         vault,
         usdcVault,
-        vlpPosition,
+        vlpMint,
+        depositorVlp,
         depositorUsdc,
         depositor,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        systemProgram: SystemProgram.programId,
-        rent: SYSVAR_RENT_PUBKEY,
+        tokenProgram:            TOKEN_PROGRAM_ID,
+        associatedTokenProgram:  ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram:           SystemProgram.programId,
+        rent:                    SYSVAR_RENT_PUBKEY,
       } as any)
       .rpc();
   }
@@ -581,23 +673,26 @@ export class PacificaOptionsClient {
     if (!this.wallet.publicKey) throw new Error('Wallet not connected');
     const withdrawer = this.wallet.publicKey;
 
-    const [vault]       = findVaultPDA(params.vaultAuthority);
-    const [usdcVault]   = findVaultUsdcPDA(vault);
-    const [vlpPosition] = findVaultLPPositionPDA(withdrawer, vault);
+    const [vault]        = findVaultPDA(params.vaultAuthority);
+    const [usdcVault]    = findVaultUsdcPDA(vault);
+    const [vlpMint]      = findVlpMintPDA(vault);
     const withdrawerUsdc = await getAssociatedTokenAddress(USDC_MINT_PUBKEY, withdrawer);
+    const withdrawerVlp  = await getAssociatedTokenAddress(vlpMint, withdrawer);
 
     return await this.program.methods
       .withdrawVault({
-        vlpTokens: new BN(Math.round(params.vlpTokens * SCALE)),
+        vlpTokens:  new BN(Math.round(params.vlpTokens * SCALE)),
         minUsdcOut: new BN(Math.round((params.minUsdcOut ?? 0) * SCALE)),
       })
       .accounts({
         vault,
         usdcVault,
-        vlpPosition,
+        vlpMint,
+        withdrawerVlp,
         withdrawerUsdc,
         withdrawer,
-        tokenProgram: TOKEN_PROGRAM_ID,
+        tokenProgram:           TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
       } as any)
       .rpc();
   }
