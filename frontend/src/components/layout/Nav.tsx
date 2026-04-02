@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { ConnectButton } from '@/components/ui/ConnectButton';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 
-export type View = 'trade' | 'portfolio' | 'lp' | 'leaderboard' | 'analytics';
+export type View = 'trade' | 'portfolio' | 'lp' | 'marketplace' | 'leaderboard' | 'analytics' | 'docs';
 
 interface NavProps {
   view: View;
@@ -15,8 +15,10 @@ const TABS: { id: View; label: string; short: string }[] = [
   { id: 'trade',       label: 'Trade',       short: 'Trade'  },
   { id: 'portfolio',   label: 'Portfolio',   short: 'Port.'  },
   { id: 'lp',          label: 'LP Vault',    short: 'LP'     },
+  { id: 'marketplace', label: 'Marketplace', short: 'P2P'    },
   { id: 'leaderboard', label: 'Leaderboard', short: 'Board'  },
   { id: 'analytics',   label: 'Analytics',   short: 'Stats'  },
+  { id: 'docs',        label: 'Docs',        short: 'Docs'   },
 ];
 
 export const Nav = React.memo(function Nav({ view, setView }: NavProps) {

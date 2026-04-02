@@ -131,4 +131,17 @@ pub enum OptionsError {
 
     #[msg("Value exceeds u64 maximum")]
     U64Overflow,
+
+    // ── P2P Marketplace ───────────────────────────────────────────────────────
+    #[msg("Listing is no longer active (already filled or cancelled)")]
+    ListingInactive,
+
+    #[msg("Listing has already been filled")]
+    ListingAlreadyFilled,
+
+    #[msg("Caller is not the listing seller")]
+    NotListingSeller,
+
+    #[msg("Invalid vault reference on listing")]
+    InvalidVault,
 }

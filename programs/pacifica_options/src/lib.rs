@@ -16,6 +16,12 @@ use instructions::rebalance_delta::*;
 use instructions::add_liquidity::*;
 use instructions::remove_liquidity::*;
 use instructions::vault_liquidity::*;
+use instructions::list_for_resale::*;
+use instructions::write_option_listing::*;
+use instructions::fill_resale_listing::*;
+use instructions::fill_written_listing::*;
+use instructions::cancel_listing::*;
+use instructions::settle_written_option::*;
 
 declare_id!("CBkvR8SeN6j8RQKB7dSxG3dza2v71XHmWEe8LgfMW1hG");
 
@@ -129,6 +135,49 @@ pub mod pacifica_options {
         args: RemoveLiquidityArgs,
     ) -> Result<()> {
         instructions::remove_liquidity::handler(ctx, args)
+    }
+
+    // ── P2P Marketplace ───────────────────────────────────────────────────────
+
+    /// List an existing protocol-issued position for resale
+    pub fn list_for_resale(ctx: Context<ListForResale>, args: ListForResaleArgs) -> Result<()> {
+        instructions::list_for_resale::handler(ctx, args)
+    }
+
+    /// Write a new option from scratch — locks collateral as counterparty
+    pub fn write_option_listing(
+        ctx: Context<WriteOptionListing>,
+        args: WriteOptionListingArgs,
+    ) -> Result<()> {
+        instructions::write_option_listing::handler(ctx, args)
+    }
+
+    /// Fill a resale listing — transfers the position from seller to buyer
+    pub fn fill_resale_listing(ctx: Context<FillResaleListing>) -> Result<()> {
+        instructions::fill_resale_listing::handler(ctx)
+    }
+
+    /// Fill a written listing — creates a WrittenPosition for the buyer
+    pub fn fill_written_listing(ctx: Context<FillWrittenListing>) -> Result<()> {
+        instructions::fill_written_listing::handler(ctx)
+    }
+
+    /// Cancel a resale listing (seller reclaims rent; no token movement)
+    pub fn cancel_resale_listing(ctx: Context<CancelResaleListing>) -> Result<()> {
+        instructions::cancel_listing::cancel_resale_handler(ctx)
+    }
+
+    /// Cancel a written listing — returns collateral to writer
+    pub fn cancel_written_listing(ctx: Context<CancelWrittenListing>) -> Result<()> {
+        instructions::cancel_listing::cancel_written_handler(ctx)
+    }
+
+    /// Settle a written option at or after expiry (permissionless)
+    pub fn settle_written_option(
+        ctx: Context<SettleWrittenOption>,
+        args: SettleWrittenOptionArgs,
+    ) -> Result<()> {
+        instructions::settle_written_option::handler(ctx, args)
     }
 
     // ── Global Vault LP ───────────────────────────────────────────────────────
