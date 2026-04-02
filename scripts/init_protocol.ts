@@ -23,7 +23,7 @@ const IDL = require('../target/idl/pacifica_options.json');
 // ── Config ───────────────────────────────────────────────────────────────────
 
 const PROGRAM_ID  = new PublicKey('CBkvR8SeN6j8RQKB7dSxG3dza2v71XHmWEe8LgfMW1hG');
-const USDC_MINT   = new PublicKey('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU');
+const USDC_MINT   = new PublicKey('HC53kut48rC2raro2XkuzmQD1g4MA3XgDK1HtfCfXf6k'); // our devnet USDC (we have mint authority)
 const RPC_URL     = 'https://api.devnet.solana.com';
 const MARKETS     = [
   // Crypto
@@ -79,8 +79,8 @@ function vlpMintPDA(vault: PublicKey): [PublicKey, number] {
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  // Load authority keypair
-  const keypairPath = path.resolve(os.homedir(), '.config/solana/id.json');
+  // Load authority keypair (vault authority — separate from USDC mint authority)
+  const keypairPath = path.resolve(os.homedir(), '.config/solana/vault_authority.json');
   if (!fs.existsSync(keypairPath)) {
     throw new Error(`Keypair not found at ${keypairPath}. Run: solana-keygen new`);
   }

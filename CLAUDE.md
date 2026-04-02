@@ -84,27 +84,29 @@ Abyssal.fi/
 
 | Account | Address |
 |---|---|
-| Program | `CBkvR8SeN6j8RQKB7dSxG3dza2v71XHmWEe8LgfMW1hG` |
-| Vault PDA | `6VJctQcCPRkSwWVL8coqNhxdvtJhQYGzZnLV2ohowP5g` |
-| Vault USDC | `jizzTANsmdq9zLbrFdroiUk3xPUzQb4hbrpJHWRvqy3` |
-| BTC IV Oracle      | `ADJm8QBLYRhwQHuWCW57QMFDdvqpNtTkSyMwLiSkkyUB` |
-| ETH IV Oracle      | `7YF8ocifL6D6kXDSL3YspPmf6sPSA4s4E2RsdaNmhfwu` |
-| SOL IV Oracle      | `8CTidLNY1aRn2uiHToJesWcFWBv1NaDLJ41mY9bvpjpy` |
-| NVDA IV Oracle     | `3X8erYWxg25G1FTZ5JuG198w8FwcFhDFJe1ex538baTw` |
-| TSLA IV Oracle     | `DTZTV5oUwvCiEEq21x7FZbRqc9Nt2ARYmVLq7tTT569k` |
-| PLTR IV Oracle     | `25Wa2TVC8b7tTyg1bhdSzfYcYMvhjqVR5dyLugfmthQn` |
-| CRCL IV Oracle     | `5T4T6derHhKqibthFXwpiLp4FFx85tN8BQXUGYh2BnzJ` |
-| HOOD IV Oracle     | `3BHC79FgTae3mywQyg2o4tTUb8KswtqCwbxA6a2kEZ11` |
-| SP500 IV Oracle    | `CEGLw4pHGWaz8x3FaMomuHSdwK4sjjenjPKcgM3H2xCc` |
-| XAU IV Oracle      | `JAvBtx2xY4it6rmaVXpshrWVs9shYCtQ4sxvGZ7v7uGq` |
-| XAG IV Oracle      | `D9gKWAJiip95styk4K6NW7UKN746SGqiLnr39peG6mTW` |
-| PAXG IV Oracle     | `5PbRFu5FaoPEfiHhTdhYjnE5oj8CtKZzN8XNN4vMhz6K` |
-| PLATINUM IV Oracle | `J2J8TFeo7MUQZ5nXoCQuLYEnCkhkK4zEKDiAny9uj3tK` |
-| NATGAS IV Oracle   | `HiTvMtWJ2sZEBWVzSpySj2mFtQrWoXTRkrW8YfX4hyf7` |
-| COPPER IV Oracle   | `9Utnwhw23uAfRA1JP8J8Ja5sadB7PB686aYWrJtoMXVB`  |
-| USDC Mint (devnet) | `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU` |
-| Authority keypair | `~/.config/solana/id.json` |
-| Keeper keypair | `~/.config/solana/keeper.json` (= id.json on devnet) |
+| Program            | `CBkvR8SeN6j8RQKB7dSxG3dza2v71XHmWEe8LgfMW1hG` |
+| Vault PDA          | `FApkeXy7k4yoLgDbWkJvEYi8pJsq9JJia8NMkinCYpDd` |
+| Vault USDC         | `4V3a9TiePG2mAMC8tdkcCrLaTe3HCaaYfUWqKr7XQbev` |
+| vLP Mint           | `4swq2n3c9SeJHRLvz6NcuYkUVwxGVPgF5m2ELzAHPzzU` |
+| USDC Mint (devnet) | `HC53kut48rC2raro2XkuzmQD1g4MA3XgDK1HtfCfXf6k` |
+| BTC IV Oracle      | `6HBM9fEMPgFWz9SUcLWNvyy4i89iCJ2Vhw98xe3kufmM` |
+| ETH IV Oracle      | `J77JH8paxATK2oTj5AXnAWkrWB3Bmx2ATt3gX5bYt2Be` |
+| SOL IV Oracle      | `J9EZYpkw8CCJ8UGimEBJ48x8Jd9eEXTe1wZakvZrjhsW` |
+| NVDA IV Oracle     | `7b8TEuLmS3jk62k5tzJGWU4HzKGHLSYCEaJUFLe97v4V` |
+| TSLA IV Oracle     | `79rfpuxkQKVvx2KtbHieHeRiKMioCsjc8qSr9CjJTeiF` |
+| PLTR IV Oracle     | `4RKUsPEKkJDE12A6aQHz3ki17SJUiKdiYw4ddrVxQraz` |
+| CRCL IV Oracle     | `9xw6VFbx434QGVVtMBWgUv4Fa6FnJxifQeawR2kZu6Cs` |
+| HOOD IV Oracle     | `6QFjbrNhpJxqSCe7xm9TCwfsdUcJH4tcyL7c8H1559QA` |
+| SP500 IV Oracle    | `AADwtA8pSEf2pFNa3DKkPxpNJye5LvkG6C8TLcmBPkPe` |
+| XAU IV Oracle      | `5z2QxzJqvhvuW7C4K5ZBweejr8555sxJTXruAs7tFDyx` |
+| XAG IV Oracle      | `7o1ZxDspRJbkizwnZEkfHjWLRyoaT6uK45kFDgxisEE2` |
+| PAXG IV Oracle     | `J3tYWJcbBX6fSY6NbpaiUKnzxb6Gwj89EWYqRGBYcaCb` |
+| PLATINUM IV Oracle | `7txSsrsA957LCKXBq4gu3w2uyAp1bDBQztn3ET4mhH6s` |
+| NATGAS IV Oracle   | `DzFu9HtmMZxU276DDx5Lwg47xMY2XAncyWbY4UxFJRxr` |
+| COPPER IV Oracle   | `9tvmSNgfNGRqecY4BmSjj982vT3RT4vFgrrVQ7qTsgsi` |
+| Vault authority    | `~/.config/solana/vault_authority.json` (`6rCfbKb7DfER9ZBcfUVEKWUr5vWeDtxhPiztpTtX2tEA`) |
+| USDC mint authority| `~/.config/solana/id.json` (`5YpmYnxuCbaTLAQLqaug9F8XBwG9XM5SFq5fhpoBdtgD`) |
+| Keeper keypair     | `~/.config/solana/keeper.json` (= id.json on devnet) |
 
 ---
 
