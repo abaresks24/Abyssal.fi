@@ -18,14 +18,14 @@ export default function LandingPage() {
       {/* Vignette */}
       <div style={{
         position: 'absolute', inset: 0,
-        background: 'radial-gradient(ellipse at 50% 45%, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.65) 100%)',
+        background: 'radial-gradient(ellipse at 50% 45%, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.35) 100%)',
         pointerEvents: 'none',
       }} />
 
       {/* Bottom fade */}
       <div style={{
         position: 'absolute', bottom: 0, left: 0, right: 0, height: 220,
-        background: 'linear-gradient(to top, rgba(5,12,22,0.92) 0%, transparent 100%)',
+        background: 'linear-gradient(to top, rgba(5,12,22,0.75) 0%, transparent 100%)',
         pointerEvents: 'none',
       }} />
 
