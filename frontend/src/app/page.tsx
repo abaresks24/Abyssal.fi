@@ -34,8 +34,8 @@ export default function LandingPage() {
         position: 'relative', zIndex: 2,
         display: 'flex', flexDirection: 'column', alignItems: 'center',
         gap: 20,
-        /* Shift slightly above true centre so button at bottom feels balanced */
-        marginBottom: 120,
+        /* Shift below true centre toward the button */
+        marginTop: 120,
       }}>
         <Image
           src="/logo.svg"
