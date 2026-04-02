@@ -32,21 +32,22 @@ function Row({ level, side, maxTotal }: { level: BookLevel; side: 'bid' | 'ask';
       position: 'relative',
       display: 'flex',
       justifyContent: 'space-between',
-      padding: '1.5px 8px',
+      padding: '2.5px 8px',
       fontSize: 11,
       fontFamily: 'monospace',
       cursor: 'default',
     }}>
       {/* depth bar */}
       <div style={{
-        position: 'absolute', right: 0, top: 0, bottom: 0,
+        position: 'absolute', right: 0, top: 1, bottom: 1,
         width: `${pct}%`,
-        background: `${bg}0.09)`,
+        background: `${bg}0.22)`,
+        borderLeft: `2px solid ${bg}0.55)`,
         pointerEvents: 'none',
       }} />
-      <span style={{ color, zIndex: 1, minWidth: 70 }}>{priceFmt(level.price)}</span>
-      <span style={{ color: 'rgba(255,255,255,0.6)', zIndex: 1 }}>{sizeFmt(level.size)}</span>
-      <span style={{ color: 'rgba(255,255,255,0.32)', zIndex: 1, minWidth: 54, textAlign: 'right' }}>
+      <span style={{ color, zIndex: 1, minWidth: 70, fontWeight: 600 }}>{priceFmt(level.price)}</span>
+      <span style={{ color: 'rgba(255,255,255,0.75)', zIndex: 1 }}>{sizeFmt(level.size)}</span>
+      <span style={{ color: 'rgba(255,255,255,0.40)', zIndex: 1, minWidth: 54, textAlign: 'right' }}>
         {sizeFmt(level.total)}
       </span>
     </div>
