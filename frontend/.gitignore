@@ -1,2 +1,6 @@
 .vercel
 .env*.local
+
+# TradingView Charting Library — private, non-redistributable
+public/static/charting_library/
+public/static/datafeeds/

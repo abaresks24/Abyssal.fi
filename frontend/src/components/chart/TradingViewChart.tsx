@@ -92,9 +92,9 @@ export function TradingViewChart() {
   const widgetRef = useRef<TVWidgetHandle | null>(null);
   const [libStatus, setLibStatus] = useState<LibStatus>('checking');
 
-  // Check if charting_library files are present
+  // Check if charting_library files are present (placed in public/static/charting_library/)
   useEffect(() => {
-    fetch('/charting_library/charting_library.js', { method: 'HEAD' })
+    fetch('/static/charting_library/charting_library.js', { method: 'HEAD' })
       .then(r => setLibStatus(r.ok ? 'available' : 'unavailable'))
       .catch(() => setLibStatus('unavailable'));
   }, []);
@@ -138,7 +138,7 @@ export function TradingViewChart() {
           minmov: 1,
           pricescale: PRICESCALE[b] ?? 100,
           has_intraday: true,
-          has_no_volume: true,
+          has_no_volume: false,
           intraday_multipliers: ['1', '3', '5', '15', '30', '60', '120', '240', '480', '720'],
           supported_resolutions: SUPPORTED_RESOLUTIONS,
           volume_precision: 3,
@@ -149,19 +149,22 @@ export function TradingViewChart() {
       getBars: async (
         symbolInfo: { ticker: string },
         resolution: string,
-        periodParams: { from: number; to: number; firstDataRequest: boolean },
+        periodParams: { from: number; to: number; countBack: number; firstDataRequest: boolean },
         onHistoryCallback: (bars: unknown[], meta: { noData: boolean }) => void,
         onErrorCallback: (err: string) => void,
       ) => {
         const interval = TV_TO_PAC[resolution] ?? '1h';
-        const sym = symbolInfo.ticker;
+        // Strip '-PERP' suffix — Pacifica kline API uses bare market symbols (BTC, ETH, SOL…)
+        const apiSym = symbolInfo.ticker.replace('-PERP', '');
         try {
+          // Prioritize countBack over from/to per TV datafeed spec
+          const limit = Math.min(Math.max(periodParams.countBack ?? 300, 100), 1000);
           const params = new URLSearchParams({
-            symbol: sym,
+            symbol: apiSym,
             interval,
             start_time: (periodParams.from * 1000).toString(),
-            end_time: (periodParams.to * 1000).toString(),
-            limit: '1000',
+            end_time:   (periodParams.to   * 1000).toString(),
+            limit:      limit.toString(),
           });
           const res = await fetch(`/api/pacifica/v1/kline/mark?${params}`);
           if (!res.ok) { onHistoryCallback([], { noData: true }); return; }
@@ -173,10 +176,10 @@ export function TradingViewChart() {
           type KlineItem = { t: number; o: string; h: string; l: string; c: string; v: string };
           const bars = (json.data as KlineItem[]).map(k => ({
             time: k.t,            // milliseconds — TV JS API accepts ms
-            open: parseFloat(k.o),
-            high: parseFloat(k.h),
-            low: parseFloat(k.l),
-            close: parseFloat(k.c),
+            open:   parseFloat(k.o),
+            high:   parseFloat(k.h),
+            low:    parseFloat(k.l),
+            close:  parseFloat(k.c),
             volume: parseFloat(k.v),
           }));
           onHistoryCallback(bars, { noData: false });
@@ -192,7 +195,7 @@ export function TradingViewChart() {
         subscriberUID: string,
       ) => {
         const interval = TV_TO_PAC[resolution] ?? '1h';
-        const sym = symbolInfo.ticker;
+        const sym = symbolInfo.ticker.replace('-PERP', '');
         pacificaClient.connect();
         const unsub = pacificaClient.subscribeCandle(sym, interval, (candle: Candle) => {
           onRealtimeCallback({
@@ -223,7 +226,7 @@ export function TradingViewChart() {
 
       widgetRef.current = new window.TradingView.widget({
         container: containerIdRef.current,
-        library_path: '/charting_library/',
+        library_path: '/static/charting_library/',   // files live in public/static/charting_library/
         locale: 'en',
         datafeed,
         symbol,
@@ -254,15 +257,24 @@ export function TradingViewChart() {
           'go_to_date',
         ],
         enabled_features: [
-          'study_templates',
+          // Drawing tools
           'side_toolbar_in_fullscreen_mode',
+          'drawing_templates',
+          // Studies / indicators
+          'study_templates',
           'dont_show_boolean_study_arguments',
           'hide_last_na_study_output',
+          // UX
           'move_logo_to_main_pane',
+          'show_spread_operators',
+          'pre_post_market_sessions',
         ],
+        // Persist chart layouts (drawing tools, indicators) per user session
+        charts_storage_url: 'https://saveload.tradingview.com',
+        charts_storage_api_version: '1.1',
+        client_id: 'abyssal.fi',
+        user_id: 'public_user',
         time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Etc/UTC',
-        // Symbol is fixed — market changes re-mount the widget
-        symbol_search_complete: undefined,
       });
     };
 
@@ -276,7 +288,7 @@ export function TradingViewChart() {
         existing.addEventListener('load', initWidget, { once: true });
       } else {
         const script = document.createElement('script');
-        script.src = '/charting_library/charting_library.js';
+        script.src = '/static/charting_library/charting_library.js';
         script.dataset.tvLib = '1';
         script.async = true;
         script.onload = initWidget;
