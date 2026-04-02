@@ -2,19 +2,34 @@
 import React from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import type { Side } from '@/types';
+import type { Side, Action } from '@/types';
 
 interface Props {
-  side: Side;
-  totalCost: number;
-  disabled: boolean;
-  onBuy: () => void;
+  side:       Side;
+  action:     Action;
+  totalCost:  number;   // for buy: premium + fee; for sell: collateral
+  netReceive: number;   // for sell: premium - fee
+  disabled:   boolean;
+  onBuy:      () => void;
 }
 
-export const BuyButton = React.memo(function BuyButton({ side, totalCost, disabled, onBuy }: Props) {
+export const BuyButton = React.memo(function BuyButton({ side, action, totalCost, netReceive, disabled, onBuy }: Props) {
   const { connected } = useWallet();
-  const color  = side === 'call' ? 'var(--green)' : 'var(--red)';
-  const dimColor = side === 'call' ? 'rgba(2,199,123,0.15)' : 'rgba(235,54,90,0.15)';
+
+  const isSell = action === 'sell';
+  const color     = isSell ? 'var(--amber)' : (side === 'call' ? 'var(--green)' : 'var(--red)');
+  const dimColor  = isSell
+    ? 'rgba(236,202,90,0.14)'
+    : (side === 'call' ? 'rgba(2,199,123,0.15)' : 'rgba(235,54,90,0.15)');
+
+  const label = (() => {
+    if (disabled) return 'Enter parameters';
+    const sideLabel = side === 'call' ? 'Call' : 'Put';
+    if (isSell) {
+      return `Sell ${sideLabel} · receive $${netReceive.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+    return `Buy ${sideLabel} · $${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  })();
 
   if (!connected) {
     return (
@@ -48,9 +63,7 @@ export const BuyButton = React.memo(function BuyButton({ side, totalCost, disabl
         cursor: disabled ? 'not-allowed' : 'pointer',
       }}
     >
-      {disabled
-        ? 'Enter parameters'
-        : `Buy ${side === 'call' ? 'Call' : 'Put'} · $${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+      {label}
     </button>
   );
 });

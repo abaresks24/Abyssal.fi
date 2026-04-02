@@ -8,6 +8,7 @@ import { useAFVR } from '@/hooks/useAFVR';
 import { usePacificaWS } from '@/hooks/usePacificaWS';
 import { PacificaOptionsClient } from '@/lib/anchor_client';
 import { VAULT_AUTHORITY, expiryToDate } from '@/lib/constants';
+import { ActionToggle } from './ActionToggle';
 import { SideToggle } from './SideToggle';
 import { StrikeSelector } from './StrikeSelector';
 import { SizeInput } from './SizeInput';
@@ -20,7 +21,7 @@ import { PositionsList } from './PositionsList';
 
 export function OptionBuilder() {
   const wallet = useWallet();
-  const { market, side, strike, expiry, size } = useOptionBuilder();
+  const { market, side, action, strike, expiry, size } = useOptionBuilder();
   const { price: spot } = usePacificaWS(market);
   const { iv } = useAFVR(market);
 
@@ -29,10 +30,19 @@ export function OptionBuilder() {
   );
 
   const [loading, setLoading] = useState(false);
-  const [txSig, setTxSig]   = useState<string | null>(null);
-  const [err, setErr]        = useState<string | null>(null);
+  const [txSig, setTxSig]     = useState<string | null>(null);
+  const [err, setErr]          = useState<string | null>(null);
 
-  const handleBuy = useCallback(async () => {
+  // Collateral for sell:
+  //   Sell Call → lock size × spot (underlying value in USDC)
+  //   Sell Put  → lock size × strike (USDC)
+  const collateral = action === 'sell'
+    ? (side === 'call' ? size * (spot > 0 ? spot : strike) : size * strike)
+    : 0;
+
+  const netReceive = totalPremium - fee;
+
+  const handleConfirm = useCallback(async () => {
     if (!wallet.publicKey || !wallet.connected) return;
     setLoading(true);
     setErr(null);
@@ -41,27 +51,40 @@ export function OptionBuilder() {
       const client    = new PacificaOptionsClient(wallet);
       const authority = new PublicKey(VAULT_AUTHORITY);
       const expiryTs  = Math.floor(expiryToDate(expiry).getTime() / 1000);
-      const slippage  = 1.05; // 5% max slippage
+      const slippage  = 1.05;
 
-      const sig = await client.buyOption({
-        vaultAuthority: authority,
-        market,
-        optionType:     side === 'call' ? 'Call' : 'Put',
-        strikeUsdc:     strike,
-        expiry:         expiryTs,
-        sizeUnderlying: size,
-        maxPremiumUsdc: totalPremium * slippage,
-      });
+      let sig: string;
+      if (action === 'buy') {
+        sig = await client.buyOption({
+          vaultAuthority: authority,
+          market,
+          optionType:     side === 'call' ? 'Call' : 'Put',
+          strikeUsdc:     strike,
+          expiry:         expiryTs,
+          sizeUnderlying: size,
+          maxPremiumUsdc: totalPremium * slippage,
+        });
+      } else {
+        sig = await client.sellOption({
+          vaultAuthority: authority,
+          market,
+          optionType:      side === 'call' ? 'Call' : 'Put',
+          strikeUsdc:      strike,
+          expiry:          expiryTs,
+          sizeUnderlying:  size,
+          minProceedsUsdc: netReceive / slippage,
+        });
+      }
       setTxSig(sig);
     } catch (e: any) {
       setErr(e?.message ?? 'Transaction failed');
     } finally {
       setLoading(false);
     }
-  }, [wallet, market, side, strike, expiry, size, totalPremium]);
+  }, [wallet, market, side, action, strike, expiry, size, totalPremium, netReceive]);
 
   return (
-    <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
       {/* Header */}
       <div style={{
@@ -73,6 +96,9 @@ export function OptionBuilder() {
           {market} · {expiry}
         </span>
       </div>
+
+      {/* Buy / Sell */}
+      <ActionToggle />
 
       {/* Call / Put */}
       <SideToggle />
@@ -108,15 +134,19 @@ export function OptionBuilder() {
           fee={fee}
           breakeven={breakeven}
           side={side}
+          action={action}
+          spot={spot}
         />
       )}
 
       {/* CTA */}
       <BuyButton
         side={side}
+        action={action}
         totalCost={totalPremium + fee}
+        netReceive={netReceive}
         disabled={strike <= 0 || premium <= 0 || loading}
-        onBuy={handleBuy}
+        onBuy={handleConfirm}
       />
 
       {/* Tx feedback */}

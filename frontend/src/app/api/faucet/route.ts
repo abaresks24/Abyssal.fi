@@ -14,15 +14,17 @@ import {
   Connection,
   Keypair,
   PublicKey,
+  LAMPORTS_PER_SOL,
 } from '@solana/web3.js';
 import {
   getOrCreateAssociatedTokenAccount,
   mintTo,
 } from '@solana/spl-token';
 
-const SOLANA_RPC  = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
-const USDC_MINT   = process.env.NEXT_PUBLIC_USDC_MINT  ?? '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
+const SOLANA_RPC    = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
+const USDC_MINT     = process.env.NEXT_PUBLIC_USDC_MINT ?? '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
 const FAUCET_AMOUNT = 1_000 * 1_000_000; // 1 000 USDC (6 decimals)
+const SOL_DROP      = 1 * LAMPORTS_PER_SOL; // 1 SOL via devnet airdrop
 
 function loadAuthority(): Keypair {
   const raw = process.env.AUTHORITY_KEYPAIR;
@@ -58,7 +60,7 @@ export async function POST(req: NextRequest) {
       recipient,
     );
 
-    // Mint FAUCET_AMOUNT to recipient
+    // Mint FAUCET_AMOUNT USDC to recipient
     const sig = await mintTo(
       connection,
       authority,
@@ -68,11 +70,22 @@ export async function POST(req: NextRequest) {
       FAUCET_AMOUNT,
     );
 
+    // Airdrop SOL from Solana devnet faucet (free, not from our account)
+    let solSig: string | null = null;
+    try {
+      solSig = await connection.requestAirdrop(recipient, SOL_DROP);
+      await connection.confirmTransaction(solSig, 'confirmed');
+    } catch {
+      // Airdrop can fail if rate-limited — non-blocking
+    }
+
     return NextResponse.json({
       success: true,
       signature: sig,
+      solSignature: solSig,
       recipient: recipient.toBase58(),
-      amount: FAUCET_AMOUNT / 1_000_000,
+      usdcAmount: FAUCET_AMOUNT / 1_000_000,
+      solAmount: SOL_DROP / LAMPORTS_PER_SOL,
       ata: ata.address.toBase58(),
     });
   } catch (e: any) {

@@ -7,6 +7,7 @@ export type Market = 'BTC' | 'ETH' | 'SOL'
 export type CryptoMarket = 'BTC' | 'ETH' | 'SOL';
 
 export type Side = 'call' | 'put';
+export type Action = 'buy' | 'sell';
 
 export type Expiry = '1D' | '3D' | '7D' | '14D' | '30D';
 
@@ -99,6 +100,7 @@ export interface Position {
 export interface OptionBuilderState {
   market: Market;
   side: Side;
+  action: Action;
   strike: number;
   expiry: Expiry;
   size: number;

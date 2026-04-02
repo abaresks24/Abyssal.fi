@@ -38,18 +38,10 @@ function LeftPanel() {
   );
 }
 
-function ChartWithBuilder({ builderHeight = 280 }: { builderHeight?: number }) {
+function ChartOnly() {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
-        <TradingViewChart />
-      </div>
-      <div style={{
-        height: builderHeight, borderTop: '1px solid var(--border)',
-        flexShrink: 0, overflowY: 'auto', background: 'var(--bg1)',
-      }}>
-        <OptionBuilder />
-      </div>
+    <div style={{ height: '100%', position: 'relative' }}>
+      <TradingViewChart />
     </div>
   );
 }
@@ -57,16 +49,31 @@ function ChartWithBuilder({ builderHeight = 280 }: { builderHeight?: number }) {
 function RightPanel() {
   return (
     <div style={{
-      width: 240, background: 'var(--bg1)',
+      display: 'flex', flexDirection: 'row',
       borderLeft: '1px solid var(--border)',
-      display: 'flex', flexDirection: 'column',
       overflow: 'hidden', flexShrink: 0,
     }}>
-      <div style={{ flex: 1, minHeight: 0, borderBottom: '1px solid var(--border)' }}>
-        <OrderBook />
+      {/* Order book + trade history */}
+      <div style={{
+        width: 220, background: 'var(--bg1)',
+        borderRight: '1px solid var(--border)',
+        display: 'flex', flexDirection: 'column',
+        overflow: 'hidden',
+      }}>
+        <div style={{ flex: 1, minHeight: 0, borderBottom: '1px solid var(--border)' }}>
+          <OrderBook />
+        </div>
+        <div style={{ height: 220, flexShrink: 0 }}>
+          <TradeHistory />
+        </div>
       </div>
-      <div style={{ height: 260, flexShrink: 0 }}>
-        <TradeHistory />
+
+      {/* Option builder */}
+      <div style={{
+        width: 260, background: 'var(--bg1)',
+        overflowY: 'auto', overflowX: 'hidden',
+      }}>
+        <OptionBuilder />
       </div>
     </div>
   );
@@ -78,8 +85,8 @@ function DesktopTradeView() {
   return (
     <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
       <LeftPanel />
-      <div style={{ flex: 1, overflow: 'hidden', background: 'var(--bg)' }}>
-        <ChartWithBuilder />
+      <div style={{ flex: 1, overflow: 'hidden', background: 'var(--bg)', minWidth: 0 }}>
+        <ChartOnly />
       </div>
       <RightPanel />
     </div>
@@ -91,8 +98,8 @@ function DesktopTradeView() {
 function TabletTradeView() {
   return (
     <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
-      <div style={{ flex: 1, overflow: 'hidden', background: 'var(--bg)' }}>
-        <ChartWithBuilder builderHeight={240} />
+      <div style={{ flex: 1, overflow: 'hidden', background: 'var(--bg)', minWidth: 0 }}>
+        <ChartOnly />
       </div>
       <RightPanel />
     </div>

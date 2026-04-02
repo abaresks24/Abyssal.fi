@@ -42,7 +42,6 @@ function Row({ level, side, maxTotal }: { level: BookLevel; side: 'bid' | 'ask';
         position: 'absolute', right: 0, top: 1, bottom: 1,
         width: `${pct}%`,
         background: `${bg}0.22)`,
-        borderLeft: `2px solid ${bg}0.55)`,
         pointerEvents: 'none',
       }} />
       <span style={{ color, zIndex: 1, minWidth: 70, fontWeight: 600 }}>{priceFmt(level.price)}</span>
