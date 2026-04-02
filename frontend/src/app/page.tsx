@@ -4,43 +4,35 @@ import { LaunchButton } from '@/components/landing/LaunchButton';
 export default function LandingPage() {
   return (
     <main style={{
-      position: 'relative',
-      width: '100vw',
-      height: '100dvh',
-      overflow: 'hidden',
+      position: 'fixed',
+      inset: 0,
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'space-between',
+      backgroundImage: 'url(/Landing.png)',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
     }}>
-      {/* Background */}
-      <Image
-        src="/landing.png"
-        alt="Abyssal background"
-        fill
-        priority
-        quality={95}
-        style={{ objectFit: 'cover', objectPosition: 'center' }}
-      />
-
       {/* Vignette */}
       <div style={{
         position: 'absolute', inset: 0,
-        background: 'radial-gradient(ellipse at 50% 40%, transparent 30%, rgba(0,0,0,0.52) 100%)',
+        background: 'radial-gradient(ellipse at 50% 40%, transparent 30%, rgba(0,0,0,0.50) 100%)',
         pointerEvents: 'none',
       }} />
 
       {/* Top fade */}
       <div style={{
         position: 'absolute', top: 0, left: 0, right: 0, height: 200,
-        background: 'linear-gradient(to bottom, rgba(5,12,22,0.70) 0%, transparent 100%)',
+        background: 'linear-gradient(to bottom, rgba(5,12,22,0.72) 0%, transparent 100%)',
         pointerEvents: 'none',
       }} />
 
       {/* Bottom fade */}
       <div style={{
         position: 'absolute', bottom: 0, left: 0, right: 0, height: 240,
-        background: 'linear-gradient(to top, rgba(5,12,22,0.88) 0%, transparent 100%)',
+        background: 'linear-gradient(to top, rgba(5,12,22,0.90) 0%, transparent 100%)',
         pointerEvents: 'none',
       }} />
 
@@ -62,7 +54,7 @@ export default function LandingPage() {
         />
         <div style={{ textAlign: 'center' }}>
           <span style={{
-            fontFamily: 'Inter, sans-serif',
+            fontFamily: 'IBM Plex Sans, Inter, sans-serif',
             fontWeight: 800,
             fontSize: 34,
             letterSpacing: '-0.03em',
