@@ -36,9 +36,6 @@ export function LaunchButton() {
           Launch app
         </button>
       </Link>
-      <span style={{ fontSize: 11.5, color: 'rgba(180,210,230,0.45)', letterSpacing: '0.02em' }}>
-        Devnet — testnet only
-      </span>
     </div>
   );
 }
