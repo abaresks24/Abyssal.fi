@@ -149,13 +149,27 @@ function AdapterConnectButton() {
         </button>
         {open && (
           <DropdownMenu onClose={() => setOpen(false)}>
-            {wallets.map(w => (
-              <button key={w.adapter.name} onClick={() => handleSelect(w)}
-                style={{ ...menuItemStyle, display: 'flex', alignItems: 'center', gap: 8 }}>
-                {w.adapter.icon && <img src={w.adapter.icon} alt="" width={16} height={16} style={{ borderRadius: 4 }} />}
-                {w.adapter.name}
-              </button>
-            ))}
+            {wallets.length === 0 ? (
+              <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text2)' }}>
+                No wallet detected.{' '}
+                <a
+                  href="https://phantom.app/download"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: 'var(--cyan)', textDecoration: 'underline' }}
+                >
+                  Install Phantom
+                </a>
+              </div>
+            ) : (
+              wallets.map(w => (
+                <button key={w.adapter.name} onClick={() => handleSelect(w)}
+                  style={{ ...menuItemStyle, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {w.adapter.icon && <img src={w.adapter.icon} alt="" width={16} height={16} style={{ borderRadius: 4 }} />}
+                  {w.adapter.name}
+                </button>
+              ))
+            )}
           </DropdownMenu>
         )}
       </div>
