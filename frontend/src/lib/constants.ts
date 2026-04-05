@@ -4,11 +4,11 @@ import type { Market, Expiry } from '@/types';
 // ── Program / network ─────────────────────────────────────────────────────────
 
 export const PROGRAM_ID       = new PublicKey('CBkvR8SeN6j8RQKB7dSxG3dza2v71XHmWEe8LgfMW1hG');
-export const USDC_MINT        = new PublicKey(process.env.NEXT_PUBLIC_USDC_MINT ?? 'HC53kut48rC2raro2XkuzmQD1g4MA3XgDK1HtfCfXf6k');
+export const USDC_MINT        = new PublicKey(process.env.NEXT_PUBLIC_USDC_MINT ?? 'USDPqRbLidFGufty2s3oizmDEKdqx7ePTqzDMbf5ZKM');
 export const SOLANA_RPC       = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
-export const VAULT_AUTHORITY  = '6rCfbKb7DfER9ZBcfUVEKWUr5vWeDtxhPiztpTtX2tEA';
-export const VAULT_PDA        = 'FApkeXy7k4yoLgDbWkJvEYi8pJsq9JJia8NMkinCYpDd';
-export const VAULT_USDC       = '4V3a9TiePG2mAMC8tdkcCrLaTe3HCaaYfUWqKr7XQbev';
+export const VAULT_AUTHORITY  = 'AHWUeGsXbx9gd46SBS5SQK4rfQ8rGb1wWAzvZtJ6zdRg';
+export const VAULT_PDA        = '9tTji3sbkRPs8V3iqzxNBuX1dYonBXa2QnuHvcKwRMM6';
+export const VAULT_USDC       = '2eY9q7gahUaHkihGPzDAna8yxW6sBv2dkPjYRmimmWKm';
 
 // ── Fees ──────────────────────────────────────────────────────────────────────
 

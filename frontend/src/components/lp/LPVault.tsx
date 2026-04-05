@@ -150,7 +150,7 @@ export function LPVault() {
             background: 'rgba(85,195,233,0.12)', color: 'var(--cyan)',
             border: '1px solid rgba(85,195,233,0.25)', fontWeight: 600,
           }}>
-            vLP — Transferable SPL Token
+            ABLP — Powered by Pacifica USDP
           </div>
         )}
       </div>
@@ -223,8 +223,15 @@ export function LPVault() {
               border: '1px solid rgba(85,195,233,0.15)',
               borderRadius: 5,
             }}>
-              Need devnet USDC?{' '}
-              <span style={{ color: 'var(--cyan)' }}>Click your wallet address in the top-right nav → "Get devnet USDC"</span>
+              Need USDP?{' '}
+              <a
+                href="https://app.pacifica.fi/faucet"
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: 'var(--cyan)', textDecoration: 'underline' }}
+              >
+                Get USDP from Pacifica ↗
+              </a>
             </div>
           )}
           <label style={{ fontSize: 12, color: 'var(--text3)', display: 'block', marginBottom: 6 }}>

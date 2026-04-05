@@ -7,9 +7,7 @@ import { PRIVY_ENABLED, usePrivyReady } from '@/components/WalletProvider';
 
 // ── Devnet USDC faucet ───────────────────────────────────────────────────────
 
-const USDC_MINT_DEVNET = 'HC53kut48rC2raro2XkuzmQD1g4MA3XgDK1HtfCfXf6k';
-
-async function requestFaucet(wallet: string): Promise<{ signature: string; solSignature: string }> {
+async function requestSolFaucet(wallet: string): Promise<string> {
   const res = await fetch('/api/faucet', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -17,19 +15,19 @@ async function requestFaucet(wallet: string): Promise<{ signature: string; solSi
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? 'Faucet failed');
-  return { signature: data.signature, solSignature: data.solSignature };
+  return data.signature as string;
 }
 
 function FaucetItem({ address, onClose }: { address: string; onClose: () => void }) {
-  const [state, setState] = useState<'idle' | 'loading' | 'ok' | 'err'>('idle');
-  const [sig, setSig]     = useState('');
+  const [state, setState]   = useState<'idle' | 'loading' | 'ok' | 'err'>('idle');
+  const [sig, setSig]       = useState('');
   const [errMsg, setErrMsg] = useState('');
 
   const handleClick = useCallback(async () => {
     setState('loading');
     try {
-      const result = await requestFaucet(address);
-      setSig(result.signature);
+      const signature = await requestSolFaucet(address);
+      setSig(signature);
       setState('ok');
     } catch (e: any) {
       setErrMsg(e?.message ?? 'Error');
@@ -44,7 +42,7 @@ function FaucetItem({ address, onClose }: { address: string; onClose: () => void
         disabled={state === 'loading'}
         style={{ ...menuItemStyle, color: 'var(--cyan)', opacity: state === 'loading' ? 0.6 : 1 }}
       >
-        {state === 'loading' ? 'Sending…' : 'Get devnet USDC'}
+        {state === 'loading' ? 'Sending…' : 'Get devnet SOL (fees)'}
       </button>
     );
   }
@@ -60,36 +58,41 @@ function FaucetItem({ address, onClose }: { address: string; onClose: () => void
   // state === 'ok'
   return (
     <div style={{ padding: '10px 12px', fontSize: 11, borderTop: '1px solid var(--border)' }}>
-      <div style={{ color: 'var(--green)', fontWeight: 600, marginBottom: 6 }}>
-        ✓ 1 000 USDC + 0.01 SOL envoyés
-      </div>
-      <div style={{ color: 'var(--text3)', marginBottom: 6, lineHeight: 1.5 }}>
-        Phantom n'affiche pas les tokens custom automatiquement.{' '}
-        Ajoute le token manuellement dans Phantom :
+      <div style={{ color: 'var(--green)', fontWeight: 600, marginBottom: 8 }}>
+        ✓ 0.05 SOL envoyé pour les frais
       </div>
       <div style={{
-        fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text2)',
-        background: 'var(--bg3)', borderRadius: 4, padding: '4px 6px',
-        wordBreak: 'break-all', marginBottom: 8,
-        userSelect: 'all',
+        background: 'rgba(85,195,233,0.08)', border: '1px solid rgba(85,195,233,0.2)',
+        borderRadius: 5, padding: '8px 10px', marginBottom: 8,
       }}>
-        {USDC_MINT_DEVNET}
+        <div style={{ color: 'var(--cyan)', fontWeight: 600, marginBottom: 4, fontSize: 10 }}>
+          USDP — Pacifica Faucet
+        </div>
+        <div style={{ color: 'var(--text3)', lineHeight: 1.5, marginBottom: 6 }}>
+          Pour obtenir des USDP, utilise le faucet officiel Pacifica :
+        </div>
+        <a
+          href="https://app.pacifica.fi/faucet"
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            display: 'block', textAlign: 'center', padding: '5px 0',
+            background: 'var(--cyan)', color: '#000', borderRadius: 4,
+            fontWeight: 700, textDecoration: 'none', fontSize: 11,
+          }}
+        >
+          app.pacifica.fi/faucet ↗
+        </a>
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
         <a
           href={`https://solscan.io/tx/${sig}?cluster=devnet`}
           target="_blank"
           rel="noreferrer"
-          style={{ fontSize: 10, color: 'var(--cyan)', textDecoration: 'none' }}
+          style={{ fontSize: 10, color: 'var(--text3)', textDecoration: 'none' }}
         >
-          Voir la tx ↗
+          Voir tx SOL ↗
         </a>
-        <button
-          onClick={() => navigator.clipboard.writeText(USDC_MINT_DEVNET)}
-          style={{ fontSize: 10, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-        >
-          Copier le mint
-        </button>
         <button
           onClick={onClose}
           style={{ fontSize: 10, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: 'auto' }}
