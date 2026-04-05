@@ -1,0 +1,16 @@
+{
+  "name": "USD Coin",
+  "symbol": "USDC",
+  "description": "USD Coin (USDC) — devnet token for Abyssal.fi testing.",
+  "image": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png",
+  "external_url": "https://abyssal.fi",
+  "properties": {
+    "files": [
+      {
+        "uri": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png",
+        "type": "image/png"
+      }
+    ],
+    "category": "fungible"
+  }
+}
