@@ -187,6 +187,12 @@ pub mod pacifica_options {
         instructions::vault_liquidity::initialize_vlp_mint(ctx)
     }
 
+    /// Reset vault accounting to zero and return all USDC to authority.
+    /// Existing vLP tokens lose their backing. Authority-only.
+    pub fn reset_vault(ctx: Context<ResetVault>) -> Result<()> {
+        instructions::vault_liquidity::reset_vault(ctx)
+    }
+
     /// Deposit USDC into the global vault and receive vLP SPL tokens
     pub fn deposit_vault(ctx: Context<DepositVault>, args: DepositVaultArgs) -> Result<()> {
         instructions::vault_liquidity::deposit_vault(ctx, args)

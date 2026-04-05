@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token, TokenAccount, Transfer};
+use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 use crate::state::vault::OptionVault;
 use crate::state::iv_oracle::IVOracle;
 use crate::state::listing::{OptionListing, ListingType};
@@ -54,13 +54,19 @@ pub struct WriteOptionListing<'info> {
         seeds = [b"listing_escrow", listing.key().as_ref()],
         bump,
     )]
-    pub escrow_pda: AccountInfo<'info>,
+    pub escrow_pda: UncheckedAccount<'info>,
+
+    /// USDC mint — must be passed explicitly for `init` token accounts in Anchor 0.30
+    #[account(
+        constraint = usdc_mint.key() == vault.usdc_mint @ OptionsError::InvalidUsdcMint,
+    )]
+    pub usdc_mint: Box<Account<'info, Mint>>,
 
     /// USDC escrow: holds the writer's collateral until settlement or cancellation
     #[account(
         init,
         payer = writer,
-        token::mint = vault.usdc_mint,
+        token::mint = usdc_mint,
         token::authority = escrow_pda,
         seeds = [b"listing_escrow_usdc", listing.key().as_ref()],
         bump,
@@ -69,7 +75,7 @@ pub struct WriteOptionListing<'info> {
 
     #[account(
         mut,
-        token::mint = vault.usdc_mint,
+        token::mint = usdc_mint,
         token::authority = writer,
     )]
     pub writer_usdc: Box<Account<'info, TokenAccount>>,

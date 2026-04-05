@@ -250,6 +250,76 @@ pub struct WithdrawVault<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
+// ── Reset Vault (authority-only, devnet / emergency use) ─────────────────────
+//
+// Transfers all USDC from the vault back to the authority and zeroes the
+// vLP accounting counters. Existing vLP SPL tokens lose their backing —
+// only use on devnet or in a controlled emergency context.
+
+#[derive(Accounts)]
+pub struct ResetVault<'info> {
+    #[account(
+        mut,
+        seeds = [b"vault", vault.authority.as_ref()],
+        bump = vault.bump,
+        constraint = authority.key() == vault.authority @ OptionsError::Unauthorized,
+    )]
+    pub vault: Box<Account<'info, OptionVault>>,
+
+    #[account(
+        mut,
+        seeds = [b"vault_usdc", vault.key().as_ref()],
+        bump,
+        token::mint = vault.usdc_mint,
+        token::authority = vault,
+    )]
+    pub usdc_vault: Box<Account<'info, TokenAccount>>,
+
+    #[account(
+        mut,
+        token::mint = vault.usdc_mint,
+        token::authority = authority,
+    )]
+    pub authority_usdc: Box<Account<'info, TokenAccount>>,
+
+    #[account(mut, constraint = authority.key() == vault.authority @ OptionsError::Unauthorized)]
+    pub authority: Signer<'info>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+pub fn reset_vault(ctx: Context<ResetVault>) -> Result<()> {
+    let balance = ctx.accounts.usdc_vault.amount;
+
+    if balance > 0 {
+        let authority_key = ctx.accounts.vault.authority;
+        let vault_bump = ctx.accounts.vault.bump;
+        let seeds: &[&[u8]] = &[b"vault", authority_key.as_ref(), &[vault_bump]];
+
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from:      ctx.accounts.usdc_vault.to_account_info(),
+                    to:        ctx.accounts.authority_usdc.to_account_info(),
+                    authority: ctx.accounts.vault.to_account_info(),
+                },
+                &[seeds],
+            ),
+            balance,
+        )?;
+    }
+
+    let vault = &mut ctx.accounts.vault;
+    vault.total_collateral  = 0;
+    vault.total_vlp_tokens  = 0;
+    vault.open_interest     = 0;
+    vault.delta_net         = 0;
+
+    msg!("Vault reset: {} USDC returned to authority", balance);
+    Ok(())
+}
+
 pub fn withdraw_vault(ctx: Context<WithdrawVault>, args: WithdrawVaultArgs) -> Result<()> {
     require!(!ctx.accounts.vault.paused, OptionsError::ProtocolPaused);
     require!(args.vlp_tokens > 0, OptionsError::ZeroLpTokens);
