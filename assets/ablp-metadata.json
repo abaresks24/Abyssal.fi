@@ -2,13 +2,13 @@
   "name": "Abyssal LP",
   "symbol": "ABLP",
   "description": "Abyssal LP token — represents a proportional share of the Abyssal vault. Deposit USDC to receive ABLP; burn ABLP to withdraw. The vault underwrites all on-chain options on Abyssal.fi.",
-  "image": "https://raw.githubusercontent.com/abaresks24/Abyssal.fi/main/frontend/public/favicon.svg",
+  "image": "https://raw.githubusercontent.com/abaresks24/Abyssal.fi/main/assets/ablp-logo.svg",
   "external_url": "https://abyssal.fi",
   "attributes": [],
   "properties": {
     "files": [
       {
-        "uri": "https://raw.githubusercontent.com/abaresks24/Abyssal.fi/main/frontend/public/favicon.svg",
+        "uri": "https://raw.githubusercontent.com/abaresks24/Abyssal.fi/main/assets/ablp-logo.svg",
         "type": "image/svg+xml"
       }
     ],
