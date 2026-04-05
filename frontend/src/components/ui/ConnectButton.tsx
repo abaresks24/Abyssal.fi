@@ -3,9 +3,60 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { usePrivy, useLogout } from '@privy-io/react-auth';
 import { useWallets } from '@privy-io/react-auth/solana';
 import { useWallet } from '@solana/wallet-adapter-react';
+import {
+  PublicKey, Connection, Transaction, TransactionInstruction, SystemProgram,
+} from '@solana/web3.js';
+import { getAssociatedTokenAddressSync } from '@solana/spl-token';
 import { PRIVY_ENABLED, usePrivyReady } from '@/components/WalletProvider';
+import { SOLANA_RPC } from '@/lib/constants';
 
-// ── Devnet USDC faucet ───────────────────────────────────────────────────────
+// ── Pacifica devnet program constants ────────────────────────────────────────
+const PACIFICA_PROGRAM_ID  = new PublicKey('peRPsYCcB1J9jvrs29jiGdjkytxs8uHLmSPLKKP9ptm');
+const USDP_MINT            = new PublicKey('USDPqRbLidFGufty2s3oizmDEKdqx7ePTqzDMbf5ZKM');
+const TOKEN_PROGRAM_ID     = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const ASSOC_TOKEN_PROG_ID  = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+const MINT_USDC_DISCRIMINATOR = Buffer.from([118, 144, 78, 118, 155, 214, 185, 186]);
+const USDP_CLAIM_AMOUNT    = BigInt(10_000 * 1_000_000); // 10 000 USDP (6 decimals)
+
+/** Calls Pacifica's on-chain mint_test_usdc instruction — user wallet must sign. */
+async function claimUSDPFaucet(
+  user: PublicKey,
+  sendTransaction: (tx: Transaction, conn: Connection) => Promise<string>,
+): Promise<string> {
+  const [centralState] = PublicKey.findProgramAddressSync(
+    [Buffer.from('central_state')],
+    PACIFICA_PROGRAM_ID,
+  );
+  const [userAccount] = PublicKey.findProgramAddressSync(
+    [Buffer.from('user_account'), user.toBuffer()],
+    PACIFICA_PROGRAM_ID,
+  );
+  const userUSDPATA = getAssociatedTokenAddressSync(USDP_MINT, user, false);
+
+  const amountBuf = Buffer.alloc(8);
+  amountBuf.writeBigUInt64LE(USDP_CLAIM_AMOUNT);
+
+  const ix = new TransactionInstruction({
+    programId: PACIFICA_PROGRAM_ID,
+    keys: [
+      { pubkey: user,              isSigner: true,  isWritable: true  },
+      { pubkey: userAccount,       isSigner: false, isWritable: true  },
+      { pubkey: userUSDPATA,       isSigner: false, isWritable: true  },
+      { pubkey: USDP_MINT,         isSigner: false, isWritable: true  },
+      { pubkey: centralState,      isSigner: false, isWritable: false },
+      { pubkey: ASSOC_TOKEN_PROG_ID, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PROGRAM_ID,  isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ],
+    data: Buffer.concat([MINT_USDC_DISCRIMINATOR, amountBuf]),
+  });
+
+  const connection = new Connection(SOLANA_RPC, 'confirmed');
+  const tx = new Transaction().add(ix);
+  return sendTransaction(tx, connection);
+}
+
+// ── Devnet SOL faucet (server-side) ──────────────────────────────────────────
 
 async function requestSolFaucet(wallet: string): Promise<string> {
   const res = await fetch('/api/faucet', {
@@ -18,22 +69,38 @@ async function requestSolFaucet(wallet: string): Promise<string> {
   return data.signature as string;
 }
 
-function FaucetItem({ address, onClose }: { address: string; onClose: () => void }) {
-  const [state, setState]   = useState<'idle' | 'loading' | 'ok' | 'err'>('idle');
-  const [sig, setSig]       = useState('');
-  const [errMsg, setErrMsg] = useState('');
+type FaucetItemProps = {
+  address: string;
+  publicKey: PublicKey | null;
+  sendTransaction: ((tx: Transaction, conn: Connection) => Promise<string>) | null;
+  onClose: () => void;
+};
+
+function FaucetItem({ address, publicKey, sendTransaction, onClose }: FaucetItemProps) {
+  const [state, setState]     = useState<'idle' | 'loading' | 'ok' | 'err'>('idle');
+  const [solSig, setSolSig]   = useState('');
+  const [usdpSig, setUsdpSig] = useState('');
+  const [errMsg, setErrMsg]   = useState('');
 
   const handleClick = useCallback(async () => {
     setState('loading');
     try {
-      const signature = await requestSolFaucet(address);
-      setSig(signature);
+      // 1) SOL for fees (server-side, no signature needed from user)
+      const solSignature = await requestSolFaucet(address);
+      setSolSig(solSignature);
+
+      // 2) USDP from Pacifica on-chain faucet (requires wallet signature)
+      if (publicKey && sendTransaction) {
+        const usdpSignature = await claimUSDPFaucet(publicKey, sendTransaction);
+        setUsdpSig(usdpSignature);
+      }
+
       setState('ok');
     } catch (e: any) {
       setErrMsg(e?.message ?? 'Error');
       setState('err');
     }
-  }, [address]);
+  }, [address, publicKey, sendTransaction]);
 
   if (state === 'idle' || state === 'loading') {
     return (
@@ -42,7 +109,7 @@ function FaucetItem({ address, onClose }: { address: string; onClose: () => void
         disabled={state === 'loading'}
         style={{ ...menuItemStyle, color: 'var(--cyan)', opacity: state === 'loading' ? 0.6 : 1 }}
       >
-        {state === 'loading' ? 'Sending…' : 'Get devnet SOL (fees)'}
+        {state === 'loading' ? 'Claiming…' : 'Get devnet tokens (SOL + USDP)'}
       </button>
     );
   }
@@ -58,46 +125,33 @@ function FaucetItem({ address, onClose }: { address: string; onClose: () => void
   // state === 'ok'
   return (
     <div style={{ padding: '10px 12px', fontSize: 11, borderTop: '1px solid var(--border)' }}>
-      <div style={{ color: 'var(--green)', fontWeight: 600, marginBottom: 8 }}>
-        ✓ 0.05 SOL envoyé pour les frais
+      <div style={{ color: 'var(--green)', fontWeight: 600, marginBottom: 6 }}>
+        ✓ 0.05 SOL + 10 000 USDP received
       </div>
-      <div style={{
-        background: 'rgba(85,195,233,0.08)', border: '1px solid rgba(85,195,233,0.2)',
-        borderRadius: 5, padding: '8px 10px', marginBottom: 8,
-      }}>
-        <div style={{ color: 'var(--cyan)', fontWeight: 600, marginBottom: 4, fontSize: 10 }}>
-          USDP — Pacifica Faucet
-        </div>
-        <div style={{ color: 'var(--text3)', lineHeight: 1.5, marginBottom: 6 }}>
-          Pour obtenir des USDP, utilise le faucet officiel Pacifica :
-        </div>
-        <a
-          href="https://app.pacifica.fi/faucet"
-          target="_blank"
-          rel="noreferrer"
-          style={{
-            display: 'block', textAlign: 'center', padding: '5px 0',
-            background: 'var(--cyan)', color: '#000', borderRadius: 4,
-            fontWeight: 700, textDecoration: 'none', fontSize: 11,
-          }}
-        >
-          app.pacifica.fi/faucet ↗
-        </a>
-      </div>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <a
-          href={`https://solscan.io/tx/${sig}?cluster=devnet`}
-          target="_blank"
-          rel="noreferrer"
-          style={{ fontSize: 10, color: 'var(--text3)', textDecoration: 'none' }}
-        >
-          Voir tx SOL ↗
-        </a>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {solSig && (
+          <a
+            href={`https://solscan.io/tx/${solSig}?cluster=devnet`}
+            target="_blank" rel="noreferrer"
+            style={{ fontSize: 10, color: 'var(--text3)', textDecoration: 'none' }}
+          >
+            SOL tx ↗
+          </a>
+        )}
+        {usdpSig && (
+          <a
+            href={`https://solscan.io/tx/${usdpSig}?cluster=devnet`}
+            target="_blank" rel="noreferrer"
+            style={{ fontSize: 10, color: 'var(--text3)', textDecoration: 'none' }}
+          >
+            USDP tx ↗
+          </a>
+        )}
         <button
           onClick={onClose}
           style={{ fontSize: 10, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: 'auto' }}
         >
-          Fermer
+          Close
         </button>
       </div>
     </div>
@@ -119,7 +173,7 @@ function PrivyConnectButton() {
   const { ready, authenticated, login } = usePrivy();
   const { logout } = useLogout();
   const { wallets: privyWallets } = useWallets();
-  const { publicKey, disconnect } = useWallet(); // kept in sync by PrivyAdapterSync
+  const { publicKey, disconnect, sendTransaction } = useWallet(); // kept in sync by PrivyAdapterSync
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -165,7 +219,7 @@ function PrivyConnectButton() {
           <button onClick={() => { navigator.clipboard.writeText(address); setMenuOpen(false); }} style={menuItemStyle}>
             Copy address
           </button>
-          <FaucetItem address={address} onClose={() => setMenuOpen(false)} />
+          <FaucetItem address={address} publicKey={publicKey} sendTransaction={sendTransaction} onClose={() => setMenuOpen(false)} />
           <button onClick={() => { disconnect(); logout(); setMenuOpen(false); }} style={{ ...menuItemStyle, color: 'var(--red)' }}>
             Disconnect
           </button>
@@ -178,7 +232,7 @@ function PrivyConnectButton() {
 // ── Fallback: local dev without Privy app ID ──────────────────────────────────
 
 function AdapterConnectButton() {
-  const { publicKey, disconnect, wallets, select, connecting } = useWallet();
+  const { publicKey, disconnect, wallets, select, connecting, sendTransaction } = useWallet();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const address = publicKey?.toBase58() ?? null;
@@ -241,7 +295,7 @@ function AdapterConnectButton() {
         <DropdownMenu onClose={() => setOpen(false)}>
           <div style={{ padding: '8px 12px', fontSize: 10, color: 'var(--text2)', fontFamily: 'var(--mono)', borderBottom: '1px solid var(--border)', wordBreak: 'break-all' }}>{address}</div>
           <button onClick={() => { navigator.clipboard.writeText(address); setOpen(false); }} style={menuItemStyle}>Copy address</button>
-          <FaucetItem address={address} onClose={() => setOpen(false)} />
+          <FaucetItem address={address} publicKey={publicKey} sendTransaction={sendTransaction} onClose={() => setOpen(false)} />
           <button onClick={() => { disconnect(); setOpen(false); }} style={{ ...menuItemStyle, color: 'var(--red)' }}>Disconnect</button>
         </DropdownMenu>
       )}
