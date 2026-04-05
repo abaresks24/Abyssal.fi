@@ -10,6 +10,7 @@ import { PacificaOptionsClient } from '@/lib/anchor_client';
 import { VAULT_AUTHORITY, expiryToDate } from '@/lib/constants';
 import { ActionToggle } from './ActionToggle';
 import { SideToggle } from './SideToggle';
+import { ExpirySelector } from '@/components/chain/ExpirySelector';
 import { StrikeSelector } from './StrikeSelector';
 import { SizeInput } from './SizeInput';
 import { PayoffChart } from './PayoffChart';
@@ -96,6 +97,9 @@ export function OptionBuilder() {
           {market} · {expiry}
         </span>
       </div>
+
+      {/* Expiry */}
+      <ExpirySelector />
 
       {/* Buy / Sell */}
       <ActionToggle />

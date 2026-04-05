@@ -215,6 +215,18 @@ export function LPVault() {
             ))}
           </div>
 
+          {tab === 'deposit' && wallet.publicKey && (
+            <div style={{
+              fontSize: 11, color: 'var(--text3)',
+              padding: '7px 10px', marginBottom: 12,
+              background: 'rgba(85,195,233,0.06)',
+              border: '1px solid rgba(85,195,233,0.15)',
+              borderRadius: 5,
+            }}>
+              Need devnet USDC?{' '}
+              <span style={{ color: 'var(--cyan)' }}>Click your wallet address in the top-right nav → "Get devnet USDC"</span>
+            </div>
+          )}
           <label style={{ fontSize: 12, color: 'var(--text3)', display: 'block', marginBottom: 6 }}>
             {tab === 'deposit' ? 'USDC Amount' : 'USDC Value to Withdraw'}
           </label>
