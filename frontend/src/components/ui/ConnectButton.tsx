@@ -7,7 +7,9 @@ import { PRIVY_ENABLED, usePrivyReady } from '@/components/WalletProvider';
 
 // ── Devnet USDC faucet ───────────────────────────────────────────────────────
 
-async function requestFaucet(wallet: string): Promise<string> {
+const USDC_MINT_DEVNET = 'HC53kut48rC2raro2XkuzmQD1g4MA3XgDK1HtfCfXf6k';
+
+async function requestFaucet(wallet: string): Promise<{ signature: string; solSignature: string }> {
   const res = await fetch('/api/faucet', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -15,38 +17,87 @@ async function requestFaucet(wallet: string): Promise<string> {
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? 'Faucet failed');
-  return data.signature as string;
+  return { signature: data.signature, solSignature: data.solSignature };
 }
 
 function FaucetItem({ address, onClose }: { address: string; onClose: () => void }) {
   const [state, setState] = useState<'idle' | 'loading' | 'ok' | 'err'>('idle');
-  const [msg, setMsg] = useState('');
+  const [sig, setSig]     = useState('');
+  const [errMsg, setErrMsg] = useState('');
 
   const handleClick = useCallback(async () => {
     setState('loading');
     try {
-      await requestFaucet(address);
+      const result = await requestFaucet(address);
+      setSig(result.signature);
       setState('ok');
-      setMsg('1 000 USDC sent!');
-      setTimeout(onClose, 1500);
     } catch (e: any) {
+      setErrMsg(e?.message ?? 'Error');
       setState('err');
-      setMsg(e?.message ?? 'Error');
     }
-  }, [address, onClose]);
+  }, [address]);
 
+  if (state === 'idle' || state === 'loading') {
+    return (
+      <button
+        onClick={handleClick}
+        disabled={state === 'loading'}
+        style={{ ...menuItemStyle, color: 'var(--cyan)', opacity: state === 'loading' ? 0.6 : 1 }}
+      >
+        {state === 'loading' ? 'Sending…' : 'Get devnet USDC'}
+      </button>
+    );
+  }
+
+  if (state === 'err') {
+    return (
+      <div style={{ padding: '8px 12px', fontSize: 11, color: 'var(--red)' }}>
+        {errMsg}
+      </div>
+    );
+  }
+
+  // state === 'ok'
   return (
-    <button
-      onClick={handleClick}
-      disabled={state === 'loading' || state === 'ok'}
-      style={{
-        ...menuItemStyle,
-        color: state === 'err' ? 'var(--red)' : state === 'ok' ? 'var(--green)' : 'var(--cyan)',
-        opacity: state === 'loading' ? 0.6 : 1,
-      }}
-    >
-      {state === 'loading' ? 'Sending…' : state === 'ok' || state === 'err' ? msg : 'Get devnet USDC'}
-    </button>
+    <div style={{ padding: '10px 12px', fontSize: 11, borderTop: '1px solid var(--border)' }}>
+      <div style={{ color: 'var(--green)', fontWeight: 600, marginBottom: 6 }}>
+        ✓ 1 000 USDC + 0.01 SOL envoyés
+      </div>
+      <div style={{ color: 'var(--text3)', marginBottom: 6, lineHeight: 1.5 }}>
+        Phantom n'affiche pas les tokens custom automatiquement.{' '}
+        Ajoute le token manuellement dans Phantom :
+      </div>
+      <div style={{
+        fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text2)',
+        background: 'var(--bg3)', borderRadius: 4, padding: '4px 6px',
+        wordBreak: 'break-all', marginBottom: 8,
+        userSelect: 'all',
+      }}>
+        {USDC_MINT_DEVNET}
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <a
+          href={`https://solscan.io/tx/${sig}?cluster=devnet`}
+          target="_blank"
+          rel="noreferrer"
+          style={{ fontSize: 10, color: 'var(--cyan)', textDecoration: 'none' }}
+        >
+          Voir la tx ↗
+        </a>
+        <button
+          onClick={() => navigator.clipboard.writeText(USDC_MINT_DEVNET)}
+          style={{ fontSize: 10, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+        >
+          Copier le mint
+        </button>
+        <button
+          onClick={onClose}
+          style={{ fontSize: 10, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: 'auto' }}
+        >
+          Fermer
+        </button>
+      </div>
+    </div>
   );
 }
 
