@@ -193,6 +193,18 @@ pub mod pacifica_options {
         instructions::vault_liquidity::reset_vault(ctx)
     }
 
+    /// Transfer vLP mint authority from vault PDA to `new_authority`.
+    /// Use before creating Metaplex token metadata (mint authority must sign).
+    /// Must call restore_vlp_mint_authority immediately after.
+    pub fn take_vlp_mint_authority(ctx: Context<TakeVlpMintAuthority>) -> Result<()> {
+        instructions::vault_liquidity::take_vlp_mint_authority(ctx)
+    }
+
+    /// Restore vLP mint authority from admin keypair back to vault PDA.
+    pub fn restore_vlp_mint_authority(ctx: Context<RestoreVlpMintAuthority>) -> Result<()> {
+        instructions::vault_liquidity::restore_vlp_mint_authority(ctx)
+    }
+
     /// Deposit USDC into the global vault and receive vLP SPL tokens
     pub fn deposit_vault(ctx: Context<DepositVault>, args: DepositVaultArgs) -> Result<()> {
         instructions::vault_liquidity::deposit_vault(ctx, args)

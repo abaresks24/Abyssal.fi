@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::token::{self, Burn, Mint, MintTo, Token, TokenAccount, Transfer};
+use anchor_spl::token::{self, Burn, Mint, MintTo, SetAuthority, Token, TokenAccount, Transfer};
+use anchor_spl::token::spl_token::instruction::AuthorityType;
 use crate::state::vault::OptionVault;
 use crate::error::OptionsError;
 
@@ -392,5 +393,113 @@ pub fn withdraw_vault(ctx: Context<WithdrawVault>, args: WithdrawVaultArgs) -> R
         "Vault withdrawal: vlp_burned={} usdc_out={} remaining_collateral={}",
         args.vlp_tokens, usdc_out, vault.total_collateral
     );
+    Ok(())
+}
+
+// ── Transfer vLP Mint Authority (authority-only) ──────────────────────────────
+//
+// Temporarily transfers the vLP SPL mint authority from the vault PDA to
+// `new_authority`. Used to allow off-chain Metaplex metadata creation, which
+// requires the mint authority to sign. Restore immediately after.
+
+#[derive(Accounts)]
+pub struct TakeVlpMintAuthority<'info> {
+    #[account(
+        mut,
+        seeds = [b"vault", vault.authority.as_ref()],
+        bump = vault.bump,
+        constraint = authority.key() == vault.authority @ OptionsError::Unauthorized,
+    )]
+    pub vault: Box<Account<'info, OptionVault>>,
+
+    #[account(
+        mut,
+        seeds = [b"vlp_mint", vault.key().as_ref()],
+        bump,
+        constraint = vlp_mint.key() == vault.vlp_mint @ OptionsError::InvalidUsdcMint,
+    )]
+    pub vlp_mint: Box<Account<'info, Mint>>,
+
+    /// The new mint authority (typically the admin keypair)
+    /// CHECK: arbitrary pubkey; admin is responsible for restoring authority
+    pub new_authority: UncheckedAccount<'info>,
+
+    #[account(mut, constraint = authority.key() == vault.authority @ OptionsError::Unauthorized)]
+    pub authority: Signer<'info>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+pub fn take_vlp_mint_authority(ctx: Context<TakeVlpMintAuthority>) -> Result<()> {
+    let vault_key   = ctx.accounts.vault.authority;
+    let vault_bump  = ctx.accounts.vault.bump;
+    let seeds: &[&[u8]] = &[b"vault", vault_key.as_ref(), &[vault_bump]];
+
+    token::set_authority(
+        CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            SetAuthority {
+                account_or_mint: ctx.accounts.vlp_mint.to_account_info(),
+                current_authority: ctx.accounts.vault.to_account_info(),
+            },
+            &[seeds],
+        ),
+        AuthorityType::MintTokens,
+        Some(ctx.accounts.new_authority.key()),
+    )?;
+
+    msg!(
+        "vLP mint authority transferred to: {}",
+        ctx.accounts.new_authority.key()
+    );
+    Ok(())
+}
+
+// ── Restore vLP Mint Authority ────────────────────────────────────────────────
+//
+// Restores the vLP SPL mint authority from the admin keypair back to the
+// vault PDA. Must be called after Metaplex metadata creation.
+
+#[derive(Accounts)]
+pub struct RestoreVlpMintAuthority<'info> {
+    #[account(
+        seeds = [b"vault", vault.authority.as_ref()],
+        bump = vault.bump,
+        constraint = authority.key() == vault.authority @ OptionsError::Unauthorized,
+    )]
+    pub vault: Box<Account<'info, OptionVault>>,
+
+    #[account(
+        mut,
+        seeds = [b"vlp_mint", vault.key().as_ref()],
+        bump,
+        constraint = vlp_mint.key() == vault.vlp_mint @ OptionsError::InvalidUsdcMint,
+    )]
+    pub vlp_mint: Box<Account<'info, Mint>>,
+
+    #[account(mut, constraint = authority.key() == vault.authority @ OptionsError::Unauthorized)]
+    pub authority: Signer<'info>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+pub fn restore_vlp_mint_authority(ctx: Context<RestoreVlpMintAuthority>) -> Result<()> {
+    // The vault PDA is the canonical mint authority — re-derive its address
+    let vault_pda_key = ctx.accounts.vault.key();
+
+    // The authority keypair is the current mint authority and signs directly
+    token::set_authority(
+        CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            SetAuthority {
+                account_or_mint: ctx.accounts.vlp_mint.to_account_info(),
+                current_authority: ctx.accounts.authority.to_account_info(),
+            },
+        ),
+        AuthorityType::MintTokens,
+        Some(vault_pda_key),
+    )?;
+
+    msg!("vLP mint authority restored to vault PDA: {}", vault_pda_key);
     Ok(())
 }
