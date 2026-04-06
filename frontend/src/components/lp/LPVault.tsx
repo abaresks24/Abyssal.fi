@@ -7,44 +7,8 @@ import { useVaultStats } from '@/hooks/useVaultStats';
 import { PacificaOptionsClient, findVaultPDA, findVlpMintPDA } from '@/lib/anchor_client';
 import { VAULT_AUTHORITY, USDC_MINT, SOLANA_RPC } from '@/lib/constants';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
-import { PRIVY_ENABLED } from '@/components/WalletProvider';
-
-// ── Privy embedded-wallet bridge ──────────────────────────────────────────────
-// Rendered ONLY inside PrivyProvider (when PRIVY_ENABLED = true).
-// Detects the Privy embedded wallet and surfaces its pubkey + signing methods
-// so LPVault can use them even when useWallet().publicKey is null.
-
-let PrivyWalletBridge: React.FC<{
-  onUpdate: (pk: PublicKey | null, w: any) => void;
-}> = () => null;
-
-if (PRIVY_ENABLED) {
-  // Lazy require so the module is only evaluated when Privy is present.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { usePrivy } = require('@privy-io/react-auth');
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { useSolanaWallets } = require('@privy-io/react-auth/solana');
-
-  PrivyWalletBridge = function PrivyBridgeInner({
-    onUpdate,
-  }: {
-    onUpdate: (pk: PublicKey | null, w: any) => void;
-  }) {
-    const { authenticated } = usePrivy() as { authenticated: boolean };
-    const { wallets } = useSolanaWallets() as { wallets: any[] };
-
-    useEffect(() => {
-      if (!authenticated) { onUpdate(null, null); return; }
-      const embedded = wallets.find((w: any) => w.walletClientType === 'privy');
-      if (embedded?.address) {
-        try { onUpdate(new PublicKey(embedded.address), embedded); }
-        catch { onUpdate(null, null); }
-      }
-    }, [authenticated, wallets, onUpdate]);
-
-    return null;
-  };
-}
+import { usePrivyReady } from '@/components/WalletProvider';
+import { PrivyVaultBridge } from './PrivyVaultBridge';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -77,9 +41,11 @@ function StatCard({ label, value, sub, accent }: {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function LPVault() {
-  const wallet = useWallet();
-  const stats = useVaultStats();
+  const wallet     = useWallet();
+  const stats      = useVaultStats();
   const { isMobile } = useBreakpoint();
+  // true when PrivyProvider is in the tree (safe to render PrivyVaultBridge)
+  const privyReady = usePrivyReady();
 
   // Privy embedded wallet fallback (null when not Privy or using external wallet)
   const [embeddedPk,  setEmbeddedPk]  = useState<PublicKey | null>(null);
@@ -223,8 +189,8 @@ export function LPVault() {
       padding: pad, display: 'flex', flexDirection: 'column', gap,
     }}>
 
-      {/* Privy embedded wallet bridge — renders nothing visible */}
-      {PRIVY_ENABLED && <PrivyWalletBridge onUpdate={handlePrivyUpdate} />}
+      {/* Privy embedded wallet bridge — only inside PrivyProvider, renders nothing visible */}
+      {privyReady && <PrivyVaultBridge onUpdate={handlePrivyUpdate} />}
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
