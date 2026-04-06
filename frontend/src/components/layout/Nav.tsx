@@ -1,5 +1,5 @@
 'use client';
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { ConnectButton } from '@/components/ui/ConnectButton';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
@@ -9,6 +9,46 @@ export type View = 'trade' | 'portfolio' | 'lp' | 'marketplace' | 'leaderboard' 
 interface NavProps {
   view: View;
   setView: (v: View) => void;
+}
+
+function ThemeToggle() {
+  const [dark, setDark] = useState(true);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('theme');
+    const isDark = saved !== 'light';
+    setDark(isDark);
+    document.documentElement.classList.toggle('light', !isDark);
+  }, []);
+
+  const toggle = useCallback(() => {
+    const newDark = !dark;
+    setDark(newDark);
+    document.documentElement.classList.toggle('light', !newDark);
+    localStorage.setItem('theme', newDark ? 'dark' : 'light');
+  }, [dark]);
+
+  return (
+    <button
+      onClick={toggle}
+      title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+      style={{
+        width: 28, height: 28,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'var(--bg3)',
+        border: '1px solid var(--border2)',
+        borderRadius: 4,
+        cursor: 'pointer',
+        color: 'var(--text2)',
+        flexShrink: 0,
+        marginRight: 6,
+        fontSize: 14,
+        lineHeight: 1,
+      }}
+    >
+      {dark ? '☀' : '☾'}
+    </button>
+  );
 }
 
 const TABS: { id: View; label: string; short: string }[] = [
@@ -107,6 +147,7 @@ export const Nav = React.memo(function Nav({ view, setView }: NavProps) {
         })}
       </div>
 
+      <ThemeToggle />
       <ConnectButton />
     </nav>
   );

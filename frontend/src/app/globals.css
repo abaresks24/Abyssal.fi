@@ -22,6 +22,18 @@
   --mono:       'IBM Plex Mono', monospace;
 }
 
+html.light {
+  --bg:         #f0f4f8;
+  --bg1:        #e8edf4;
+  --bg2:        #dde4ed;
+  --bg3:        #d0d9e5;
+  --border:     #bcc8d8;
+  --border2:    #a8b8cc;
+  --text:       #0a121c;
+  --text2:      #2d4a6a;
+  --text3:      #5c7a97;
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {
