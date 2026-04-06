@@ -8,7 +8,14 @@ import { PacificaOptionsClient, findVaultPDA, findVlpMintPDA } from '@/lib/ancho
 import { VAULT_AUTHORITY, USDC_MINT, SOLANA_RPC } from '@/lib/constants';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { usePrivyReady } from '@/components/WalletProvider';
-import { PrivyVaultBridge } from './PrivyVaultBridge';
+import dynamic from 'next/dynamic';
+
+// Dynamic import with ssr:false prevents Privy modules from running on the
+// server — they access window/document at module level and crash during SSR.
+const PrivyVaultBridge = dynamic(
+  () => import('./PrivyVaultBridge').then(m => ({ default: m.PrivyVaultBridge })),
+  { ssr: false, loading: () => null },
+);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
