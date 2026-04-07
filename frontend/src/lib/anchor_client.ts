@@ -632,17 +632,31 @@ export class PacificaOptionsClient {
   }
 
   /**
-   * Returns the USDC mint actually stored in the vault — the authoritative
-   * source to use for ATA derivation.  Falls back to USDC_MINT_PUBKEY.
+   * Returns the USDC mint actually stored in the vault — authoritative source
+   * for ATA derivation.  Uses a read-only dummy wallet so it never requires
+   * wallet.signTransaction to be available.  Falls back to USDC_MINT_PUBKEY.
    */
-  async getVaultUsdcMint(vaultAuthority: PublicKey): Promise<PublicKey> {
+  static async getVaultUsdcMint(vaultAuthority: PublicKey): Promise<PublicKey> {
     try {
-      const [vault] = findVaultPDA(vaultAuthority);
-      const state   = await this.program.account.optionVault.fetch(vault);
-      const mint    = state.usdcMint as PublicKey;
+      const connection = new Connection(SOLANA_RPC, 'confirmed');
+      const dummy = {
+        publicKey:           PublicKey.default,
+        signTransaction:     async (tx: web3.Transaction) => tx,
+        signAllTransactions: async (txs: web3.Transaction[]) => txs,
+      };
+      const provider = new AnchorProvider(connection, dummy as any, { commitment: 'confirmed' });
+      const program  = new Program<PacificaOptions>(IDL as any, provider);
+      const [vault]  = findVaultPDA(vaultAuthority);
+      const state    = await program.account.optionVault.fetch(vault);
+      const mint     = state.usdcMint as PublicKey;
       if (!mint.equals(PublicKey.default)) return mint;
     } catch {}
     return USDC_MINT_PUBKEY;
+  }
+
+  /** Instance alias for callers that already have a client. */
+  async getVaultUsdcMint(vaultAuthority: PublicKey): Promise<PublicKey> {
+    return PacificaOptionsClient.getVaultUsdcMint(vaultAuthority);
   }
 
   async depositVault(params: {
