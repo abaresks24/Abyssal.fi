@@ -590,11 +590,12 @@ export class PacificaOptionsClient {
   // ── Global Vault LP (SPL token) ─────────────────────────────────────────────
 
   /** Returns the user's vLP SPL token balance (0 if no ATA yet). */
-  async getVlpBalance(vaultAuthority: PublicKey): Promise<number> {
-    if (!this.wallet.publicKey) return 0;
+  async getVlpBalance(vaultAuthority: PublicKey, user?: PublicKey): Promise<number> {
+    const owner = user ?? this.wallet.publicKey;
+    if (!owner) return 0;
     const [vault]    = findVaultPDA(vaultAuthority);
     const [vlpMint]  = findVlpMintPDA(vault);
-    const userVlpAta = await getAssociatedTokenAddress(vlpMint, this.wallet.publicKey);
+    const userVlpAta = await getAssociatedTokenAddress(vlpMint, owner);
     try {
       const bal = await this.connection.getTokenAccountBalance(userVlpAta);
       return parseFloat(bal.value.uiAmountString ?? '0');

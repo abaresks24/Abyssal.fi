@@ -76,30 +76,51 @@ type FaucetItemProps = {
   onClose: () => void;
 };
 
+/** Extract a human-readable message from a Solana/wallet error. */
+function extractErrorMsg(e: any): string {
+  // Anchor / program logs often contain the real reason
+  const logs: string[] | undefined = e?.logs ?? e?.transactionError?.logs;
+  if (logs?.length) {
+    const errLine = logs.find((l: string) => l.includes('Error') || l.includes('error') || l.includes('failed'));
+    if (errLine) return errLine.replace(/^Program \S+ /, '').substring(0, 120);
+  }
+  // WalletSendTransactionError wraps the real cause
+  if (e?.cause?.message) return e.cause.message;
+  if (e?.message && e.message !== 'Unexpected error') return e.message;
+  return 'Transaction failed — check browser console for details';
+}
+
 function FaucetItem({ address, publicKey, sendTransaction, onClose }: FaucetItemProps) {
-  const [state, setState]     = useState<'idle' | 'loading' | 'ok' | 'err'>('idle');
-  const [solSig, setSolSig]   = useState('');
-  const [usdpSig, setUsdpSig] = useState('');
-  const [errMsg, setErrMsg]   = useState('');
+  const [state, setState]       = useState<'idle' | 'loading' | 'done'>('idle');
+  const [solSig, setSolSig]     = useState('');
+  const [usdpSig, setUsdpSig]   = useState('');
+  const [solErr, setSolErr]     = useState('');
+  const [usdpErr, setUsdpErr]   = useState('');
 
   const handleClick = useCallback(async () => {
     setState('loading');
+    setSolErr(''); setUsdpErr('');
+
+    // Step 1 — SOL (server-side, no wallet needed)
     try {
-      // 1) SOL for fees (server-side, no signature needed from user)
-      const solSignature = await requestSolFaucet(address);
-      setSolSig(solSignature);
-
-      // 2) USDP from Pacifica on-chain faucet (requires wallet signature)
-      if (publicKey && sendTransaction) {
-        const usdpSignature = await claimUSDPFaucet(publicKey, sendTransaction);
-        setUsdpSig(usdpSignature);
-      }
-
-      setState('ok');
+      const sig = await requestSolFaucet(address);
+      setSolSig(sig);
     } catch (e: any) {
-      setErrMsg(e?.message ?? 'Error');
-      setState('err');
+      setSolErr(e?.message ?? 'SOL faucet failed');
     }
+
+    // Step 2 — USDP on-chain (needs wallet signature)
+    if (publicKey && sendTransaction) {
+      try {
+        const sig = await claimUSDPFaucet(publicKey, sendTransaction);
+        setUsdpSig(sig);
+      } catch (e: any) {
+        console.error('[USDP faucet]', e);
+        setUsdpErr(extractErrorMsg(e));
+      }
+    }
+
+    setState('done');
   }, [address, publicKey, sendTransaction]);
 
   if (state === 'idle' || state === 'loading') {
@@ -114,46 +135,50 @@ function FaucetItem({ address, publicKey, sendTransaction, onClose }: FaucetItem
     );
   }
 
-  if (state === 'err') {
-    return (
-      <div style={{ padding: '8px 12px', fontSize: 11, color: 'var(--red)' }}>
-        {errMsg}
-      </div>
-    );
-  }
+  // state === 'done' — show results for each step independently
+  const solOk  = !!solSig;
+  const usdpOk = !!usdpSig;
 
-  // state === 'ok'
   return (
     <div style={{ padding: '10px 12px', fontSize: 11, borderTop: '1px solid var(--border)' }}>
-      <div style={{ color: 'var(--green)', fontWeight: 600, marginBottom: 6 }}>
-        ✓ 0.05 SOL + 10 000 USDP received
-      </div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {solSig && (
-          <a
-            href={`https://solscan.io/tx/${solSig}?cluster=devnet`}
-            target="_blank" rel="noreferrer"
-            style={{ fontSize: 10, color: 'var(--text3)', textDecoration: 'none' }}
-          >
-            SOL tx ↗
-          </a>
+      {/* SOL row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+        <span style={{ color: solOk ? 'var(--green)' : 'var(--red)', fontWeight: 600 }}>
+          {solOk ? '✓' : '✗'} 0.05 SOL
+        </span>
+        {solOk && solSig && (
+          <a href={`https://solscan.io/tx/${solSig}?cluster=devnet`} target="_blank" rel="noreferrer"
+            style={{ fontSize: 10, color: 'var(--text3)', textDecoration: 'none' }}>↗</a>
         )}
-        {usdpSig && (
-          <a
-            href={`https://solscan.io/tx/${usdpSig}?cluster=devnet`}
-            target="_blank" rel="noreferrer"
-            style={{ fontSize: 10, color: 'var(--text3)', textDecoration: 'none' }}
-          >
-            USDP tx ↗
-          </a>
-        )}
-        <button
-          onClick={onClose}
-          style={{ fontSize: 10, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: 'auto' }}
-        >
-          Close
-        </button>
+        {solErr && <span style={{ color: 'var(--red)', fontSize: 10 }}>{solErr}</span>}
       </div>
+
+      {/* USDP row */}
+      {(publicKey && sendTransaction) ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+          <span style={{ color: usdpOk ? 'var(--green)' : 'var(--red)', fontWeight: 600 }}>
+            {usdpOk ? '✓' : '✗'} 10 000 USDP
+          </span>
+          {usdpOk && usdpSig && (
+            <a href={`https://solscan.io/tx/${usdpSig}?cluster=devnet`} target="_blank" rel="noreferrer"
+              style={{ fontSize: 10, color: 'var(--text3)', textDecoration: 'none' }}>↗</a>
+          )}
+          {usdpErr && (
+            <span style={{ color: 'var(--red)', fontSize: 10, wordBreak: 'break-word' }}>{usdpErr}</span>
+          )}
+        </div>
+      ) : (
+        <div style={{ color: 'var(--text3)', fontSize: 10, marginBottom: 6 }}>
+          USDP: wallet not ready (reconnect and retry)
+        </div>
+      )}
+
+      <button
+        onClick={onClose}
+        style={{ fontSize: 10, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+      >
+        Close
+      </button>
     </div>
   );
 }

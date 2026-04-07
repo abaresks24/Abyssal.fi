@@ -67,9 +67,9 @@ export function LPVault() {
       const authority = new PublicKey(VAULT_AUTHORITY);
       const client    = new PacificaOptionsClient(wallet);
 
-      // vLP balance
+      // vLP balance — pass publicKey explicitly so it works even when wallet.publicKey is null
       try {
-        setVlpBalance(await client.getVlpBalance(authority));
+        setVlpBalance(await client.getVlpBalance(authority, publicKey));
       } catch { setVlpBalance(0); }
 
       // USDP balance — use the mint actually stored in the vault
@@ -104,6 +104,8 @@ export function LPVault() {
       setTxSig(sig);
       setAmount('');
       await fetchBalances();
+      // Re-fetch after 2 s in case the RPC node hasn't propagated the balance yet
+      setTimeout(() => fetchBalances(), 2000);
     } catch (e: any) {
       const msg: string = e?.message ?? 'Transaction failed';
       const match = msg.match(/Error Code: (\w+)\.[^]*?Error Message: (.+?)\./m);
@@ -226,7 +228,12 @@ export function LPVault() {
 
           {/* Position */}
           <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '20px 24px' }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 16 }}>Your Position</div>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>Your Position</span>
+            <button onClick={() => fetchBalances()} disabled={balLoading}
+              style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, opacity: balLoading ? 0.5 : 1 }}
+              title="Refresh balance">↻</button>
+          </div>
             {!publicKey ? (
               <div style={{ fontSize: 12, color: 'var(--text3)' }}>Connect wallet to view your position.</div>
             ) : balLoading ? (
