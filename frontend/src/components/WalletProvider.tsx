@@ -143,14 +143,6 @@ export const WalletContextProvider: FC<Props> = ({ children }) => {
             loginMessage: 'Trade on-chain options on Solana',
             walletList: ['detected_wallets', 'phantom', 'solflare', 'backpack', 'coinbase_wallet'],
           },
-          // solanaClusters is required — without it Privy doesn't know which
-          // network to use and silently fails to connect external wallets.
-          solanaClusters: [
-            {
-              name: 'devnet',
-              rpcUrl: process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? 'https://api.devnet.solana.com',
-            },
-          ],
           embeddedWallets: {
             solana: { createOnLogin: 'users-without-wallets' },
           },
