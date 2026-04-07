@@ -65,17 +65,18 @@ export function LPVault() {
     try {
       const conn      = new Connection(SOLANA_RPC, 'confirmed');
       const authority = new PublicKey(VAULT_AUTHORITY);
+      const client    = new PacificaOptionsClient(wallet);
 
       // vLP balance
       try {
-        const client = new PacificaOptionsClient(wallet);
         setVlpBalance(await client.getVlpBalance(authority));
       } catch { setVlpBalance(0); }
 
-      // USDP balance
+      // USDP balance — use the mint actually stored in the vault
       try {
-        const ata = await getAssociatedTokenAddress(USDC_MINT, publicKey);
-        const bal = await conn.getTokenAccountBalance(ata);
+        const usdcMint = await client.getVaultUsdcMint(authority);
+        const ata      = await getAssociatedTokenAddress(usdcMint, publicKey);
+        const bal      = await conn.getTokenAccountBalance(ata);
         setUsdpBalance(parseFloat(bal.value.uiAmountString ?? '0'));
       } catch { setUsdpBalance(0); }
     } finally {

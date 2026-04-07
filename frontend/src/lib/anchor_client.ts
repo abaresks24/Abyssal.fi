@@ -631,6 +631,20 @@ export class PacificaOptionsClient {
       .rpc();
   }
 
+  /**
+   * Returns the USDC mint actually stored in the vault — the authoritative
+   * source to use for ATA derivation.  Falls back to USDC_MINT_PUBKEY.
+   */
+  async getVaultUsdcMint(vaultAuthority: PublicKey): Promise<PublicKey> {
+    try {
+      const [vault] = findVaultPDA(vaultAuthority);
+      const state   = await this.program.account.optionVault.fetch(vault);
+      const mint    = state.usdcMint as PublicKey;
+      if (!mint.equals(PublicKey.default)) return mint;
+    } catch {}
+    return USDC_MINT_PUBKEY;
+  }
+
   async depositVault(params: {
     vaultAuthority: PublicKey;
     usdcAmount: number;
@@ -642,7 +656,10 @@ export class PacificaOptionsClient {
     const [vault]       = findVaultPDA(params.vaultAuthority);
     const [usdcVault]   = findVaultUsdcPDA(vault);
     const [vlpMint]     = findVlpMintPDA(vault);
-    const depositorUsdc = await getAssociatedTokenAddress(USDC_MINT_PUBKEY, depositor);
+
+    // Read the mint actually stored in the vault to avoid ConstraintTokenMint
+    const usdcMint      = await this.getVaultUsdcMint(params.vaultAuthority);
+    const depositorUsdc = await getAssociatedTokenAddress(usdcMint, depositor);
     const depositorVlp  = await getAssociatedTokenAddress(vlpMint, depositor);
 
     return await this.program.methods
@@ -676,7 +693,8 @@ export class PacificaOptionsClient {
     const [vault]        = findVaultPDA(params.vaultAuthority);
     const [usdcVault]    = findVaultUsdcPDA(vault);
     const [vlpMint]      = findVlpMintPDA(vault);
-    const withdrawerUsdc = await getAssociatedTokenAddress(USDC_MINT_PUBKEY, withdrawer);
+    const usdcMint       = await this.getVaultUsdcMint(params.vaultAuthority);
+    const withdrawerUsdc = await getAssociatedTokenAddress(usdcMint, withdrawer);
     const withdrawerVlp  = await getAssociatedTokenAddress(vlpMint, withdrawer);
 
     return await this.program.methods
