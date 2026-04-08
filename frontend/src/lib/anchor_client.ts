@@ -590,6 +590,64 @@ export class PacificaOptionsClient {
   // ── Global Vault LP (SPL token) ─────────────────────────────────────────────
 
   /** Returns the user's vLP SPL token balance (0 if no ATA yet). */
+  // ── Positions ───────────────────────────────────────────────────────────────
+
+  /**
+   * Fetch all OptionPosition accounts owned by `owner`.
+   * Read-only — uses a dummy wallet, no signing required.
+   * memcmp layout: [8 discriminator][1 bump][32 owner] → offset 9 for owner.
+   */
+  static async getPositions(owner: PublicKey): Promise<OptionPositionAccount[]> {
+    try {
+      const connection = new Connection(SOLANA_RPC, 'confirmed');
+      const dummy = {
+        publicKey:           PublicKey.default,
+        signTransaction:     async (tx: web3.Transaction) => tx,
+        signAllTransactions: async (txs: web3.Transaction[]) => txs,
+      };
+      const provider = new AnchorProvider(connection, dummy as any, { commitment: 'confirmed' });
+      const program  = new Program<PacificaOptions>(IDL as any, provider);
+
+      const accounts = await program.account.optionPosition.all([
+        { memcmp: { offset: 9, bytes: owner.toBase58() } },
+      ]);
+
+      return accounts.map(({ publicKey, account }) => {
+        // Anchor decodes enum variants as { variantName: {} } — normalize to uppercase string
+        const parseMarket = (m: any): Market => {
+          const key = Object.keys(m)[0].toUpperCase() as Market;
+          return MARKET_DISCRIMINANTS[key] !== undefined ? key : 'BTC';
+        };
+        const parseOptionType = (ot: any): OptionType => {
+          const key = Object.keys(ot)[0];
+          return (key.charAt(0).toUpperCase() + key.slice(1).toLowerCase()) as OptionType;
+        };
+
+        const status: PositionStatus = (account.settled as boolean) ? 'settled' : 'open';
+
+        return {
+          pubkey:          publicKey.toBase58(),
+          owner:           owner.toBase58(),
+          market:          parseMarket(account.market),
+          optionType:      parseOptionType(account.optionType),
+          strike:          (account.strike as BN).toNumber() / SCALE,
+          expiry:          new Date((account.expiry as BN).toNumber() * 1000),
+          size:            (account.size as BN).toNumber() / SCALE,
+          premiumPaid:     (account.premiumPaid as BN).toNumber() / SCALE,
+          entryIv:         (account.entryIv as BN).toNumber() / SCALE,
+          entryDelta:      (account.entryDelta as BN).toNumber() / SCALE,
+          settled:         account.settled as boolean,
+          payoffReceived:  (account.payoffReceived as BN).toNumber() / SCALE,
+          createdAt:       new Date((account.createdAt as BN).toNumber() * 1000),
+          status,
+        };
+      });
+    } catch (e) {
+      console.error('[getPositions]', e);
+      return [];
+    }
+  }
+
   async getVlpBalance(vaultAuthority: PublicKey, user?: PublicKey): Promise<number> {
     const owner = user ?? this.wallet.publicKey;
     if (!owner) return 0;
