@@ -6,7 +6,7 @@ use crate::state::amm_pool::AmmPool;
 use crate::state::iv_oracle::IVOracle;
 use crate::math::black_scholes::{black_scholes_call, black_scholes_put, time_to_expiry_years};
 use crate::math::greeks::compute_delta;
-use crate::math::fixed_point::{apply_platform_fee, SCALE, SCALE_I};
+use crate::math::fixed_point::{apply_platform_fee, SCALE};
 use crate::error::OptionsError;
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
@@ -151,7 +151,6 @@ pub fn handler(ctx: Context<BuyOption>, args: BuyOptionArgs) -> Result<()> {
     require!(raw_premium > 0, OptionsError::ZeroPremium);
 
     // ── Platform fee: 5 bps (0.05%) ──────────────────────────────────────────
-    // fee = raw_premium * 5 / 10_000
     let (_net_premium, fee) = apply_platform_fee(raw_premium);
     let total_premium = raw_premium.checked_add(fee).ok_or(OptionsError::MathOverflow)?;
 
@@ -165,8 +164,6 @@ pub fn handler(ctx: Context<BuyOption>, args: BuyOptionArgs) -> Result<()> {
     );
 
     // ── Collateral ratio check: vault must hold ≥ 120% of worst-case payoff ──
-    // Call: max payoff ≈ spot (unlimited upside approximated conservatively)
-    // Put: max payoff = strike (price goes to 0)
     let max_payoff_per_unit = match option_type {
         OptionType::Call => spot,
         OptionType::Put  => args.strike,
@@ -176,8 +173,6 @@ pub fn handler(ctx: Context<BuyOption>, args: BuyOptionArgs) -> Result<()> {
         .ok_or(OptionsError::MathOverflow)?
         .checked_div(SCALE as u128)
         .ok_or(OptionsError::MathOverflow)? as u64;
-    // Total liability = existing OI (USDC notional) + this trade's max payoff
-    // Vault must hold ≥ 120% of total liability after receiving the premium
     let vault_after_premium = ctx.accounts.usdc_vault.amount
         .checked_add(total_premium)
         .ok_or(OptionsError::MathOverflow)?;
@@ -222,7 +217,6 @@ pub fn handler(ctx: Context<BuyOption>, args: BuyOptionArgs) -> Result<()> {
     vault.open_interest = vault.open_interest
         .checked_add(oi_notional)
         .ok_or(OptionsError::MathOverflow)?;
-    // delta_net: for each option sold by vault, vault is short delta
     let delta_contribution = (delta as i128)
         .checked_mul(args.size as i128)
         .ok_or(OptionsError::MathOverflow)?
@@ -245,7 +239,6 @@ pub fn handler(ctx: Context<BuyOption>, args: BuyOptionArgs) -> Result<()> {
     }
 
     // ── Accumulate position ───────────────────────────────────────────────────
-    // First buy: update entry_iv / entry_delta (position seeded with 0s by ensure_series)
     {
         let position = &mut ctx.accounts.position;
         if position.size == 0 {

@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token, TokenAccount, Transfer};
+use anchor_spl::associated_token::AssociatedToken;
+use anchor_spl::token::{self, Burn, Mint, Token, TokenAccount, Transfer};
 use crate::state::vault::OptionVault;
 use crate::state::position::{OptionPosition, OptionType};
 use crate::state::iv_oracle::IVOracle;
@@ -65,10 +66,29 @@ pub struct ExerciseOption<'info> {
     )]
     pub owner_usdc: Box<Account<'info, TokenAccount>>,
 
+    // ── NFT receipt (burned on exercise) ─────────────────────────────────────
+    /// NFT mint for this position
+    #[account(
+        mut,
+        seeds = [b"option_nft", position.key().as_ref()],
+        bump,
+    )]
+    pub nft_mint: Box<Account<'info, Mint>>,
+
+    /// Owner's NFT token account
+    #[account(
+        mut,
+        associated_token::mint      = nft_mint,
+        associated_token::authority = owner,
+    )]
+    pub owner_nft_ata: Box<Account<'info, TokenAccount>>,
+
     #[account(mut)]
     pub owner: Signer<'info>,
 
     pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
 }
 
 pub fn handler(ctx: Context<ExerciseOption>, args: ExerciseOptionArgs) -> Result<()> {
@@ -137,6 +157,19 @@ pub fn handler(ctx: Context<ExerciseOption>, args: ExerciseOptionArgs) -> Result
         signer_seeds,
     );
     token::transfer(cpi_ctx, net_payoff)?;
+
+    // ── Burn NFT receipt ─────────────────────────────────────────────────────
+    if ctx.accounts.owner_nft_ata.amount >= 1 {
+        let burn_cpi = CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            Burn {
+                mint:      ctx.accounts.nft_mint.to_account_info(),
+                from:      ctx.accounts.owner_nft_ata.to_account_info(),
+                authority: ctx.accounts.owner.to_account_info(),
+            },
+        );
+        token::burn(burn_cpi, 1)?;
+    }
 
     // ── Update position ──────────────────────────────────────────────────────
     let position = &mut ctx.accounts.position;

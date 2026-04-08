@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token, TokenAccount, Transfer};
+use anchor_spl::associated_token::AssociatedToken;
+use anchor_spl::token::{self, Burn, Mint, Token, TokenAccount, Transfer};
 use crate::state::vault::OptionVault;
 use crate::state::position::{OptionPosition, OptionType};
 use crate::state::amm_pool::AmmPool;
@@ -89,10 +90,29 @@ pub struct SellOption<'info> {
     )]
     pub seller_usdc: Box<Account<'info, TokenAccount>>,
 
+    // ── NFT receipt (burned on full close) ───────────────────────────────────
+    /// NFT mint for this position
+    #[account(
+        mut,
+        seeds = [b"option_nft", position.key().as_ref()],
+        bump,
+    )]
+    pub nft_mint: Box<Account<'info, Mint>>,
+
+    /// Seller's NFT token account (holds the 1 receipt NFT)
+    #[account(
+        mut,
+        associated_token::mint  = nft_mint,
+        associated_token::authority = seller,
+    )]
+    pub seller_nft_ata: Box<Account<'info, TokenAccount>>,
+
     #[account(mut)]
     pub seller: Signer<'info>,
 
     pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
 }
 
 pub fn handler(ctx: Context<SellOption>, args: SellOptionArgs) -> Result<()> {
@@ -192,10 +212,25 @@ pub fn handler(ctx: Context<SellOption>, args: SellOptionArgs) -> Result<()> {
     token::transfer(cpi_ctx, net_proceeds)?;
 
     // ── Update position ──────────────────────────────────────────────────────
+    let is_full_close = ctx.accounts.position.size == args.size;
     let position = &mut ctx.accounts.position;
     position.size = position.size.saturating_sub(args.size);
     if position.size == 0 {
         position.settled = true;
+    }
+
+    // ── Burn NFT on full position close ──────────────────────────────────────
+    // Only burn when the entire position is sold (partial sells keep the NFT).
+    if is_full_close && ctx.accounts.seller_nft_ata.amount >= 1 {
+        let burn_cpi = CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            Burn {
+                mint:      ctx.accounts.nft_mint.to_account_info(),
+                from:      ctx.accounts.seller_nft_ata.to_account_info(),
+                authority: ctx.accounts.seller.to_account_info(),
+            },
+        );
+        token::burn(burn_cpi, 1)?;
     }
 
     // ── Update vault state ───────────────────────────────────────────────────

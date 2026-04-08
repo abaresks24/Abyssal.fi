@@ -22,6 +22,7 @@ use instructions::fill_resale_listing::*;
 use instructions::fill_written_listing::*;
 use instructions::cancel_listing::*;
 use instructions::settle_written_option::*;
+use instructions::mint_option_nft::*;
 
 declare_id!("CBkvR8SeN6j8RQKB7dSxG3dza2v71XHmWEe8LgfMW1hG");
 
@@ -105,6 +106,13 @@ pub mod pacifica_options {
     /// Buy an option (platform fee = 5 bps applied on top of BS premium)
     pub fn buy_option(ctx: Context<BuyOption>, args: BuyOptionArgs) -> Result<()> {
         instructions::buy_option::handler(ctx, args)
+    }
+
+    /// Mint the NFT receipt for an option position.
+    /// Call in the same transaction as buy_option (second instruction).
+    /// Idempotent: no-op if the NFT was already minted.
+    pub fn mint_option_nft(ctx: Context<MintOptionNft>) -> Result<()> {
+        instructions::mint_option_nft::handler(ctx)
     }
 
     /// Sell (close) an option position back to the pool

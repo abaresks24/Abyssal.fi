@@ -268,6 +268,247 @@
       ]
     },
     {
+      "name": "cancel_resale_listing",
+      "docs": [
+        "Cancel a resale listing (seller reclaims rent; no token movement)"
+      ],
+      "discriminator": [
+        167,
+        17,
+        194,
+        212,
+        201,
+        87,
+        96,
+        138
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "listing",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  105,
+                  110,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "seller"
+              },
+              {
+                "kind": "account",
+                "path": "listing.nonce",
+                "account": "OptionListing"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancel_written_listing",
+      "docs": [
+        "Cancel a written listing — returns collateral to writer"
+      ],
+      "discriminator": [
+        146,
+        184,
+        152,
+        26,
+        139,
+        236,
+        37,
+        112
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "listing",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  105,
+                  110,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "writer"
+              },
+              {
+                "kind": "account",
+                "path": "listing.nonce",
+                "account": "OptionListing"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow_pda",
+          "docs": [
+            "PDA authority over the escrow token account"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  105,
+                  110,
+                  103,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "listing"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow_usdc",
+          "docs": [
+            "Escrow token account holding the collateral — will be drained and closed"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  105,
+                  110,
+                  103,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  117,
+                  115,
+                  100,
+                  99
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "listing"
+              }
+            ]
+          }
+        },
+        {
+          "name": "writer_usdc",
+          "docs": [
+            "Writer's USDC — receives the collateral back"
+          ],
+          "writable": true
+        },
+        {
+          "name": "writer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "deposit_vault",
       "docs": [
         "Deposit USDC into the global vault and receive vLP SPL tokens"
@@ -654,6 +895,129 @@
           "writable": true
         },
         {
+          "name": "nft_mint",
+          "docs": [
+            "NFT mint for this position"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  110,
+                  102,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "position"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_nft_ata",
+          "docs": [
+            "Owner's NFT token account"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "nft_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
           "name": "owner",
           "writable": true,
           "signer": true
@@ -661,6 +1025,14 @@
         {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -673,6 +1045,270 @@
           }
         }
       ]
+    },
+    {
+      "name": "fill_resale_listing",
+      "docs": [
+        "Fill a resale listing — transfers the position from seller to buyer"
+      ],
+      "discriminator": [
+        70,
+        208,
+        66,
+        61,
+        120,
+        130,
+        224,
+        115
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "listing",
+          "docs": [
+            "The listing to fill — PDA verified via stored seller + nonce"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  105,
+                  110,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "listing.seller",
+                "account": "OptionListing"
+              },
+              {
+                "kind": "account",
+                "path": "listing.nonce",
+                "account": "OptionListing"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seller_position",
+          "docs": [
+            "Seller's position — size must cover what's listed"
+          ],
+          "writable": true
+        },
+        {
+          "name": "buyer_position",
+          "docs": [
+            "Buyer's position for this series — created if it doesn't exist yet"
+          ],
+          "writable": true
+        },
+        {
+          "name": "buyer_usdc",
+          "docs": [
+            "Buyer pays the ask price from here"
+          ],
+          "writable": true
+        },
+        {
+          "name": "seller_usdc",
+          "docs": [
+            "Seller receives the ask price here"
+          ],
+          "writable": true
+        },
+        {
+          "name": "buyer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "fill_written_listing",
+      "docs": [
+        "Fill a written listing — creates a WrittenPosition for the buyer"
+      ],
+      "discriminator": [
+        165,
+        225,
+        8,
+        48,
+        55,
+        172,
+        21,
+        182
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "listing",
+          "docs": [
+            "The written listing to fill"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  105,
+                  110,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "listing.seller",
+                "account": "OptionListing"
+              },
+              {
+                "kind": "account",
+                "path": "listing.nonce",
+                "account": "OptionListing"
+              }
+            ]
+          }
+        },
+        {
+          "name": "written_position",
+          "docs": [
+            "Buyer's claim on the written option — created by this instruction"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  114,
+                  105,
+                  116,
+                  116,
+                  101,
+                  110,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "buyer"
+              },
+              {
+                "kind": "account",
+                "path": "listing"
+              }
+            ]
+          }
+        },
+        {
+          "name": "buyer_usdc",
+          "docs": [
+            "Buyer's USDC — pays the writer's premium"
+          ],
+          "writable": true
+        },
+        {
+          "name": "writer_usdc",
+          "docs": [
+            "Writer receives the premium here"
+          ],
+          "writable": true
+        },
+        {
+          "name": "buyer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": []
     },
     {
       "name": "initialize_amm_pool",
@@ -986,6 +1622,307 @@
       "args": []
     },
     {
+      "name": "list_for_resale",
+      "docs": [
+        "List an existing protocol-issued position for resale"
+      ],
+      "discriminator": [
+        235,
+        101,
+        201,
+        204,
+        83,
+        163,
+        213,
+        243
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "position",
+          "docs": [
+            "Seller's existing position — verified to have enough size and not settled"
+          ]
+        },
+        {
+          "name": "listing",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  105,
+                  110,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "seller"
+              },
+              {
+                "kind": "arg",
+                "path": "args.nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "ListForResaleArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "mint_option_nft",
+      "docs": [
+        "Mint the NFT receipt for an option position.",
+        "Call in the same transaction as buy_option (second instruction).",
+        "Idempotent: no-op if the NFT was already minted."
+      ],
+      "discriminator": [
+        211,
+        62,
+        27,
+        141,
+        9,
+        234,
+        204,
+        159
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "docs": [
+            "Global vault — used as PDA signer for mint authority"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "position",
+          "docs": [
+            "The buyer's option position — must have size > 0 (already bought)"
+          ]
+        },
+        {
+          "name": "nft_mint",
+          "docs": [
+            "NFT mint — one per position, 0 decimals, vault PDA is the authority.",
+            "seed = [\"option_nft\", position_pubkey]"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  110,
+                  102,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "position"
+              }
+            ]
+          }
+        },
+        {
+          "name": "buyer_nft_ata",
+          "docs": [
+            "Buyer's associated token account for the NFT"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "buyer"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "nft_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "nft_metadata",
+          "docs": [
+            "Metaplex metadata account — created by the Token Metadata program"
+          ],
+          "writable": true
+        },
+        {
+          "name": "buyer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_metadata_program",
+          "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "pause_vault",
       "docs": [
         "Pause the vault (halts all user-facing instructions)"
@@ -1214,6 +2151,164 @@
       ]
     },
     {
+      "name": "reset_vault",
+      "docs": [
+        "Reset vault accounting to zero and return all USDC to authority.",
+        "Existing vLP tokens lose their backing. Authority-only."
+      ],
+      "discriminator": [
+        31,
+        74,
+        153,
+        84,
+        34,
+        87,
+        160,
+        67
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  117,
+                  115,
+                  100,
+                  99
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority_usdc",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "restore_vlp_mint_authority",
+      "docs": [
+        "Restore vLP mint authority from admin keypair back to vault PDA."
+      ],
+      "discriminator": [
+        105,
+        65,
+        254,
+        167,
+        247,
+        183,
+        249,
+        136
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vlp_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  108,
+                  112,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "sell_option",
       "docs": [
         "Sell (close) an option position back to the pool",
@@ -1305,6 +2400,129 @@
           "writable": true
         },
         {
+          "name": "nft_mint",
+          "docs": [
+            "NFT mint for this position"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  110,
+                  102,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "position"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seller_nft_ata",
+          "docs": [
+            "Seller's NFT token account (holds the 1 receipt NFT)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "seller"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "nft_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
           "name": "seller",
           "writable": true,
           "signer": true
@@ -1312,6 +2530,14 @@
         {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -1436,6 +2662,328 @@
           }
         }
       ]
+    },
+    {
+      "name": "settle_written_option",
+      "docs": [
+        "Settle a written option at or after expiry (permissionless)"
+      ],
+      "discriminator": [
+        178,
+        24,
+        140,
+        21,
+        157,
+        126,
+        182,
+        208
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "iv_oracle"
+        },
+        {
+          "name": "listing",
+          "docs": [
+            "The listing that originated this written option (needed for escrow PDA derivation)",
+            "May already be inactive (active = false) — that is expected."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  105,
+                  110,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "listing.seller",
+                "account": "OptionListing"
+              },
+              {
+                "kind": "account",
+                "path": "listing.nonce",
+                "account": "OptionListing"
+              }
+            ]
+          }
+        },
+        {
+          "name": "written_position",
+          "docs": [
+            "Buyer's claim — must not be settled yet"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  114,
+                  105,
+                  116,
+                  116,
+                  101,
+                  110,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "written_position.buyer",
+                "account": "WrittenPosition"
+              },
+              {
+                "kind": "account",
+                "path": "listing"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow_pda",
+          "docs": [
+            "Escrow PDA authority"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  105,
+                  110,
+                  103,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "listing"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow_usdc",
+          "docs": [
+            "Escrow USDC — holds writer's collateral"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  105,
+                  110,
+                  103,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  117,
+                  115,
+                  100,
+                  99
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "listing"
+              }
+            ]
+          }
+        },
+        {
+          "name": "buyer_usdc",
+          "docs": [
+            "Buyer's USDC — receives payoff if ITM"
+          ],
+          "writable": true
+        },
+        {
+          "name": "writer_usdc",
+          "docs": [
+            "Writer's USDC — receives remaining collateral"
+          ],
+          "writable": true
+        },
+        {
+          "name": "writer",
+          "docs": [
+            "Writer's system account (receives rent from closed accounts)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Anyone can call this (permissionless settlement after expiry).",
+            "The payer just covers transaction fees."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SettleWrittenOptionArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "take_vlp_mint_authority",
+      "docs": [
+        "Transfer vLP mint authority from vault PDA to `new_authority`.",
+        "Use before creating Metaplex token metadata (mint authority must sign).",
+        "Must call restore_vlp_mint_authority immediately after."
+      ],
+      "discriminator": [
+        170,
+        27,
+        93,
+        173,
+        112,
+        185,
+        77,
+        154
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vlp_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  108,
+                  112,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "new_authority",
+          "docs": [
+            "The new mint authority (typically the admin keypair)"
+          ]
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
     },
     {
       "name": "unpause_vault",
@@ -1760,6 +3308,190 @@
           }
         }
       ]
+    },
+    {
+      "name": "write_option_listing",
+      "docs": [
+        "Write a new option from scratch — locks collateral as counterparty"
+      ],
+      "discriminator": [
+        9,
+        17,
+        135,
+        195,
+        165,
+        229,
+        155,
+        146
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "iv_oracle",
+          "docs": [
+            "Oracle supplies the current spot price (needed to size Call collateral)"
+          ]
+        },
+        {
+          "name": "listing",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  105,
+                  110,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "writer"
+              },
+              {
+                "kind": "arg",
+                "path": "args.nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow_pda",
+          "docs": [
+            "PDA that acts as authority over the escrow token account.",
+            "No data — purely a signing key."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  105,
+                  110,
+                  103,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "listing"
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_mint",
+          "docs": [
+            "USDC mint — must be passed explicitly for `init` token accounts in Anchor 0.30"
+          ]
+        },
+        {
+          "name": "escrow_usdc",
+          "docs": [
+            "USDC escrow: holds the writer's collateral until settlement or cancellation"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  105,
+                  110,
+                  103,
+                  95,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  117,
+                  115,
+                  100,
+                  99
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "listing"
+              }
+            ]
+          }
+        },
+        {
+          "name": "writer_usdc",
+          "writable": true
+        },
+        {
+          "name": "writer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "WriteOptionListingArgs"
+            }
+          }
+        }
+      ]
     }
   ],
   "accounts": [
@@ -1803,6 +3535,19 @@
       ]
     },
     {
+      "name": "OptionListing",
+      "discriminator": [
+        139,
+        1,
+        66,
+        86,
+        29,
+        213,
+        186,
+        115
+      ]
+    },
+    {
       "name": "OptionPosition",
       "discriminator": [
         212,
@@ -1826,6 +3571,19 @@
         85,
         29,
         36
+      ]
+    },
+    {
+      "name": "WrittenPosition",
+      "discriminator": [
+        22,
+        137,
+        241,
+        118,
+        116,
+        199,
+        113,
+        231
       ]
     }
   ],
@@ -2044,6 +3802,26 @@
       "code": 6039,
       "name": "U64Overflow",
       "msg": "Value exceeds u64 maximum"
+    },
+    {
+      "code": 6040,
+      "name": "ListingInactive",
+      "msg": "Listing is no longer active (already filled or cancelled)"
+    },
+    {
+      "code": 6041,
+      "name": "ListingAlreadyFilled",
+      "msg": "Listing has already been filled"
+    },
+    {
+      "code": 6042,
+      "name": "NotListingSeller",
+      "msg": "Caller is not the listing seller"
+    },
+    {
+      "code": 6043,
+      "name": "InvalidVault",
+      "msg": "Invalid vault reference on listing"
     }
   ],
   "types": [
@@ -2555,6 +4333,68 @@
       }
     },
     {
+      "name": "ListForResaleArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_discriminant",
+            "type": "u8"
+          },
+          {
+            "name": "option_type",
+            "type": "u8"
+          },
+          {
+            "name": "strike",
+            "type": "u64"
+          },
+          {
+            "name": "expiry",
+            "type": "i64"
+          },
+          {
+            "name": "size",
+            "docs": [
+              "Number of contracts to list (must be ≤ seller's position.size)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "ask_price",
+            "docs": [
+              "Total USDC the seller wants for the entire `size`"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "nonce",
+            "docs": [
+              "Seller-chosen unique nonce (e.g. unix ms timestamp)"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ListingType",
+      "docs": [
+        "Whether the listing is a resale of an existing position or a freshly written option"
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Resale"
+          },
+          {
+            "name": "Written"
+          }
+        ]
+      }
+    },
+    {
       "name": "Market",
       "docs": [
         "Supported underlying markets",
@@ -2608,6 +4448,119 @@
           },
           {
             "name": "COPPER"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OptionListing",
+      "docs": [
+        "A P2P marketplace listing — either a resale or a freshly written option.",
+        "",
+        "PDA seeds: [\"listing\", seller, nonce_le8]",
+        "The seller picks any unique u64 nonce (e.g. current timestamp in ms)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "listing_type",
+            "type": {
+              "defined": {
+                "name": "ListingType"
+              }
+            }
+          },
+          {
+            "name": "seller",
+            "docs": [
+              "Wallet that created the listing"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "vault",
+            "docs": [
+              "Protocol vault this listing references"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "market",
+            "type": {
+              "defined": {
+                "name": "Market"
+              }
+            }
+          },
+          {
+            "name": "option_type",
+            "type": {
+              "defined": {
+                "name": "OptionType"
+              }
+            }
+          },
+          {
+            "name": "strike",
+            "type": "u64"
+          },
+          {
+            "name": "expiry",
+            "type": "i64"
+          },
+          {
+            "name": "size",
+            "docs": [
+              "Number of option contracts being sold (6-decimal, underlying units)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "ask_price",
+            "docs": [
+              "Total USDC the buyer must pay the seller (6 dec).",
+              "For Resale: resale premium. For Written: writer's premium."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "collateral_locked",
+            "docs": [
+              "USDC locked in escrow (Written only; 0 for Resale)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "nonce",
+            "docs": [
+              "Seller-chosen nonce for unique PDA derivation"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "active",
+            "docs": [
+              "false once filled or cancelled"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "_padding",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
           }
         ]
       }
@@ -3077,6 +5030,21 @@
       }
     },
     {
+      "name": "SettleWrittenOptionArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "settlement_price",
+            "docs": [
+              "Settlement price provided by caller — validated against oracle (5% tolerance)"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "UpdateIVParamsArgsExt",
       "type": {
         "kind": "struct",
@@ -3126,6 +5094,150 @@
               "Minimum USDC to receive — slippage guard (0 = no check)"
             ],
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WriteOptionListingArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_discriminant",
+            "type": "u8"
+          },
+          {
+            "name": "option_type",
+            "type": "u8"
+          },
+          {
+            "name": "strike",
+            "type": "u64"
+          },
+          {
+            "name": "expiry",
+            "type": "i64"
+          },
+          {
+            "name": "size",
+            "type": "u64"
+          },
+          {
+            "name": "ask_price",
+            "docs": [
+              "Premium the writer wants to receive (total USDC for the entire size)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "nonce",
+            "docs": [
+              "Seller-chosen unique nonce"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WrittenPosition",
+      "docs": [
+        "Buyer's claim against a Written option.",
+        "",
+        "Created when a Written OptionListing is filled.",
+        "The writer's USDC collateral sits in an escrow token account whose",
+        "authority PDA is [\"listing_escrow\", listing_pubkey].",
+        "",
+        "PDA seeds: [\"written_position\", buyer, listing_pubkey]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "listing",
+            "docs": [
+              "Back-reference to the OptionListing (used to derive escrow PDAs)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "writer",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "market",
+            "type": {
+              "defined": {
+                "name": "Market"
+              }
+            }
+          },
+          {
+            "name": "option_type",
+            "type": {
+              "defined": {
+                "name": "OptionType"
+              }
+            }
+          },
+          {
+            "name": "strike",
+            "type": "u64"
+          },
+          {
+            "name": "expiry",
+            "type": "i64"
+          },
+          {
+            "name": "size",
+            "type": "u64"
+          },
+          {
+            "name": "premium_paid",
+            "docs": [
+              "USDC premium paid by buyer to writer at fill time"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "collateral_locked",
+            "docs": [
+              "Mirrors listing.collateral_locked at fill time"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "settled",
+            "type": "bool"
+          },
+          {
+            "name": "payoff_received",
+            "docs": [
+              "Net payoff received by buyer at settlement (0 if OTM)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "_padding",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
           }
         ]
       }

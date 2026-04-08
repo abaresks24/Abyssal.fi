@@ -13,6 +13,7 @@ import {
   PublicKey,
   SystemProgram,
   SYSVAR_RENT_PUBKEY,
+  Transaction,
 } from '@solana/web3.js';
 import {
   TOKEN_PROGRAM_ID,
@@ -35,8 +36,10 @@ import { MARKET_DISCRIMINANTS, OPTION_TYPE_DISCRIMINANTS } from '@/types';
 import type { Market, OptionType, OptionPositionAccount, PositionStatus } from '@/types';
 type Position = OptionPositionAccount;
 
-const PROGRAM_PUBKEY   = new PublicKey(PROGRAM_ID);
-const USDC_MINT_PUBKEY = new PublicKey(USDC_MINT);
+const PROGRAM_PUBKEY              = new PublicKey(PROGRAM_ID);
+const USDC_MINT_PUBKEY            = new PublicKey(USDC_MINT);
+const TOKEN_METADATA_PROGRAM_ID   = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
+const ASSOCIATED_TOKEN_PROGRAM_ID_PK = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
 
 // ── PDA helpers ───────────────────────────────────────────────────────────────
 
@@ -108,6 +111,27 @@ export function findLPPositionPDA(owner: PublicKey, pool: PublicKey): [PublicKey
     [Buffer.from('lp_position'), owner.toBuffer(), pool.toBuffer()],
     PROGRAM_PUBKEY,
   );
+}
+
+/** Option NFT mint — seeds: ["option_nft", position_pubkey] */
+export function findOptionNftMintPDA(position: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from('option_nft'), position.toBuffer()],
+    PROGRAM_PUBKEY,
+  );
+}
+
+/** Metaplex metadata PDA for a given mint */
+export function findMetadataPDA(nftMint: PublicKey): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [
+      Buffer.from('metadata'),
+      TOKEN_METADATA_PROGRAM_ID.toBuffer(),
+      nftMint.toBuffer(),
+    ],
+    TOKEN_METADATA_PROGRAM_ID,
+  );
+  return pda;
 }
 
 export function findVaultLPPositionPDA(owner: PublicKey, vault: PublicKey): [PublicKey, number] {
@@ -296,7 +320,13 @@ export class PacificaOptionsClient {
       await this.ensureSeries(params);
     }
 
-    return await this.program.methods
+    // NFT accounts for mintOptionNft (second instruction in same transaction)
+    const [nftMint]  = findOptionNftMintPDA(position);
+    const nftAta     = await getAssociatedTokenAddress(nftMint, buyer, false, TOKEN_PROGRAM_ID);
+    const nftMeta    = findMetadataPDA(nftMint);
+
+    // Build both instructions and send atomically in one transaction.
+    const buyIx = await this.program.methods
       .buyOption({
         marketDiscriminant: marketDisc,
         optionType: optTypeDisc,
@@ -315,7 +345,33 @@ export class PacificaOptionsClient {
         buyer,
         tokenProgram: TOKEN_PROGRAM_ID,
       } as any)
-      .rpc();
+      .instruction();
+
+    const mintIx = await this.program.methods
+      .mintOptionNft()
+      .accounts({
+        vault,
+        position,
+        nftMint,
+        buyerNftAta:          nftAta,
+        nftMetadata:          nftMeta,
+        buyer,
+        tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID_PK,
+        tokenProgram:         TOKEN_PROGRAM_ID,
+        systemProgram:        SystemProgram.programId,
+        rent:                 SYSVAR_RENT_PUBKEY,
+      } as any)
+      .instruction();
+
+    const { blockhash, lastValidBlockHeight } =
+      await this.connection.getLatestBlockhash();
+    const tx = new Transaction({ feePayer: buyer, blockhash, lastValidBlockHeight })
+      .add(buyIx, mintIx);
+
+    const sig = await this.wallet.sendTransaction!(tx, this.connection);
+    await this.connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight });
+    return sig;
   }
 
   // ── Sell Option ─────────────────────────────────────────────────────────────
@@ -344,7 +400,9 @@ export class PacificaOptionsClient {
     const [ivOracle]  = findIVOraclePDA(vault, marketDisc);
     const [ammPool]   = findAmmPoolPDA(vault, marketDisc, optTypeDisc, strike, expiry);
     const [position]  = findPositionPDA(seller, vault, marketDisc, optTypeDisc, strike, expiry);
-    const sellerUsdc  = await getAssociatedTokenAddress(USDC_MINT_PUBKEY, seller);
+    const sellerUsdc    = await getAssociatedTokenAddress(USDC_MINT_PUBKEY, seller);
+    const [nftMint]     = findOptionNftMintPDA(position);
+    const sellerNftAta  = await getAssociatedTokenAddress(nftMint, seller, false, TOKEN_PROGRAM_ID);
 
     return await this.program.methods
       .sellOption({
@@ -362,8 +420,12 @@ export class PacificaOptionsClient {
         ivOracle,
         position,
         sellerUsdc,
+        nftMint,
+        sellerNftAta,
         seller,
-        tokenProgram: TOKEN_PROGRAM_ID,
+        tokenProgram:         TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID_PK,
+        systemProgram:        SystemProgram.programId,
       } as any)
       .rpc();
   }
@@ -389,7 +451,9 @@ export class PacificaOptionsClient {
     const [usdcVault] = findVaultUsdcPDA(vault);
     const [ivOracle]  = findIVOraclePDA(vault, marketDisc);
     const [position]  = findPositionPDA(owner, vault, marketDisc, optTypeDisc, strike, expiry);
-    const ownerUsdc   = await getAssociatedTokenAddress(USDC_MINT_PUBKEY, owner);
+    const ownerUsdc    = await getAssociatedTokenAddress(USDC_MINT_PUBKEY, owner);
+    const [nftMint]    = findOptionNftMintPDA(position);
+    const ownerNftAta  = await getAssociatedTokenAddress(nftMint, owner, false, TOKEN_PROGRAM_ID);
 
     return await this.program.methods
       .exerciseOption({
@@ -404,8 +468,12 @@ export class PacificaOptionsClient {
         ivOracle,
         position,
         ownerUsdc,
+        nftMint,
+        ownerNftAta,
         owner,
-        tokenProgram: TOKEN_PROGRAM_ID,
+        tokenProgram:         TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID_PK,
+        systemProgram:        SystemProgram.programId,
       } as any)
       .rpc();
   }

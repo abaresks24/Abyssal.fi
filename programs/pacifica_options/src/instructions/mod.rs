@@ -9,6 +9,7 @@ pub mod rebalance_delta;
 pub mod add_liquidity;
 pub mod remove_liquidity;
 pub mod vault_liquidity;
+pub mod mint_option_nft;
 // ── P2P Marketplace ───────────────────────────────────────────────────────────
 pub mod list_for_resale;
 pub mod write_option_listing;
@@ -30,6 +31,7 @@ pub use settle_expired::{SettleExpired, SettleExpiredArgs};
 pub use rebalance_delta::{RebalanceDelta, RebalanceDeltaArgs};
 pub use add_liquidity::{AddLiquidity, AddLiquidityArgs};
 pub use remove_liquidity::{RemoveLiquidity, RemoveLiquidityArgs};
+pub use mint_option_nft::{MintOptionNft};
 pub use vault_liquidity::{
     InitializeVlpMint, DepositVault, DepositVaultArgs, WithdrawVault, WithdrawVaultArgs,
 };
