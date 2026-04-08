@@ -110,12 +110,24 @@ function SolanaAdapters({ children }: { children: ReactNode }) {
   );
 }
 
+// PrivyReadyBridge reads the actual Privy SDK readiness and passes it into
+// PrivyReadyContext so ConnectButton only becomes clickable once Privy is
+// fully initialized — not just once the component is mounted.
+function PrivyReadyBridge({ children }: { children: ReactNode }) {
+  const { ready } = usePrivy();
+  return (
+    <PrivyReadyContext.Provider value={ready}>
+      {children}
+    </PrivyReadyContext.Provider>
+  );
+}
+
 function PrivyInner({ children }: { children: ReactNode }) {
   return (
-    <>
+    <PrivyReadyBridge>
       <PrivyAdapterSync />
       {children}
-    </>
+    </PrivyReadyBridge>
   );
 }
 
@@ -136,9 +148,10 @@ export const WalletContextProvider: FC<Props> = ({ children }) => {
     );
   }
 
+  // No outer PrivyReadyContext.Provider here — PrivyInner > PrivyReadyBridge
+  // handles it using the real usePrivy().ready value.
   return (
-    <PrivyReadyContext.Provider value={true}>
-      <PrivyProvider
+    <PrivyProvider
         appId={PRIVY_APP_ID}
         config={{
           // 'detected_wallets' is the correct key (not 'detected_solana_wallets')
@@ -165,6 +178,5 @@ export const WalletContextProvider: FC<Props> = ({ children }) => {
           <PrivyInner>{children}</PrivyInner>
         </SolanaAdapters>
       </PrivyProvider>
-    </PrivyReadyContext.Provider>
   );
 };

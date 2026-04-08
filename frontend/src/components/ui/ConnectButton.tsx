@@ -195,15 +195,16 @@ function FaucetItem({ address, publicKey, sendTransaction, onClose }: FaucetItem
 // and immediately close.
 
 function PrivyConnectButton() {
-  const { ready, authenticated, login } = usePrivy();
+  // ready is guaranteed by PrivyReadyBridge in WalletProvider — this component
+  // only renders when usePrivy().ready === true.
+  const { authenticated, login } = usePrivy();
   const { logout } = useLogout();
   const { wallets: privyWallets } = useWallets();
-  const { publicKey, disconnect, sendTransaction } = useWallet(); // kept in sync by PrivyAdapterSync
-  const [menuOpen, setMenuOpen] = useState(false);
+  const { publicKey, disconnect, sendTransaction } = useWallet();
+  const [menuOpen, setMenuOpen]   = useState(false);
+  const [loginErr, setLoginErr]   = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Use adapter publicKey when available (synced from Privy external wallet),
-  // otherwise fall back to Privy embedded wallet address.
   const address: string | null = publicKey?.toBase58() ?? privyWallets[0]?.address ?? null;
 
   useEffect(() => {
@@ -215,13 +216,33 @@ function PrivyConnectButton() {
     return () => document.removeEventListener('mousedown', handler);
   }, [menuOpen]);
 
-  if (!ready) return <button disabled style={btnStyle({ muted: true })}>Loading…</button>;
+  const handleLogin = useCallback(async () => {
+    setLoginErr(null);
+    try {
+      await login();
+    } catch (e: any) {
+      console.error('[Privy login]', e);
+      setLoginErr(e?.message ?? 'Login failed');
+    }
+  }, [login]);
 
   if (!authenticated || !address) {
     return (
-      <button onClick={login} style={btnStyle({ primary: true })}>
-        Connect Wallet
-      </button>
+      <div style={{ position: 'relative' }}>
+        <button onClick={handleLogin} style={btnStyle({ primary: true })}>
+          Connect Wallet
+        </button>
+        {loginErr && (
+          <div style={{
+            position: 'absolute', top: 'calc(100% + 4px)', right: 0,
+            background: 'var(--bg2)', border: '1px solid var(--red)',
+            borderRadius: 6, padding: '6px 10px', fontSize: 11,
+            color: 'var(--red)', whiteSpace: 'nowrap', zIndex: 1000,
+          }}>
+            {loginErr}
+          </div>
+        )}
+      </div>
     );
   }
 
