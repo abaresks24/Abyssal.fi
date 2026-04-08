@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { usePositions } from '@/hooks/usePositions';
+import { solscanAccount } from '@/lib/constants';
 import type { Market, Side, OptionPositionAccount } from '@/types';
 
 function fmt(n: number, d = 2) {
@@ -182,7 +183,7 @@ export function Portfolio() {
                   </span>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4 }}>
                     <a
-                      href={`https://solscan.io/account/${p.pubkey}?cluster=devnet`}
+                      href={solscanAccount(p.pubkey)}
                       target="_blank"
                       rel="noreferrer"
                       style={{

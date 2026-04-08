@@ -7,12 +7,12 @@ import {
   PublicKey, Connection, Transaction, TransactionInstruction, SystemProgram,
 } from '@solana/web3.js';
 import { getAssociatedTokenAddressSync } from '@solana/spl-token';
-import { PRIVY_ENABLED } from '@/components/WalletProvider';
-import { SOLANA_RPC } from '@/lib/constants';
+import { PRIVY_ENABLED, usePrivyReady } from '@/components/WalletProvider';
+import { SOLANA_RPC, USDC_MINT, PACIFICA_FAUCET_PROGRAM_ID, solscanTx } from '@/lib/constants';
 
-// ── Pacifica devnet program constants ────────────────────────────────────────
-const PACIFICA_PROGRAM_ID  = new PublicKey('peRPsYCcB1J9jvrs29jiGdjkytxs8uHLmSPLKKP9ptm');
-const USDP_MINT            = new PublicKey('USDPqRbLidFGufty2s3oizmDEKdqx7ePTqzDMbf5ZKM');
+// ── Pacifica devnet faucet constants ─────────────────────────────────────────
+const PACIFICA_PROGRAM_ID  = new PublicKey(PACIFICA_FAUCET_PROGRAM_ID);
+const USDP_MINT_PK         = USDC_MINT; // vault's settlement token (Pacifica USDP)
 const TOKEN_PROGRAM_ID     = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 const ASSOC_TOKEN_PROG_ID  = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
 const MINT_USDC_DISCRIMINATOR = Buffer.from([118, 144, 78, 118, 155, 214, 185, 186]);
@@ -31,7 +31,7 @@ async function claimUSDPFaucet(
     [Buffer.from('user_account'), user.toBuffer()],
     PACIFICA_PROGRAM_ID,
   );
-  const userUSDPATA = getAssociatedTokenAddressSync(USDP_MINT, user, false);
+  const userUSDPATA = getAssociatedTokenAddressSync(USDP_MINT_PK, user, false);
 
   const amountBuf = Buffer.alloc(8);
   amountBuf.writeBigUInt64LE(USDP_CLAIM_AMOUNT);
@@ -42,7 +42,7 @@ async function claimUSDPFaucet(
       { pubkey: user,              isSigner: true,  isWritable: true  },
       { pubkey: userAccount,       isSigner: false, isWritable: true  },
       { pubkey: userUSDPATA,       isSigner: false, isWritable: true  },
-      { pubkey: USDP_MINT,         isSigner: false, isWritable: true  },
+      { pubkey: USDP_MINT_PK,      isSigner: false, isWritable: true  },
       { pubkey: centralState,      isSigner: false, isWritable: false },
       { pubkey: ASSOC_TOKEN_PROG_ID, isSigner: false, isWritable: false },
       { pubkey: TOKEN_PROGRAM_ID,  isSigner: false, isWritable: false },
@@ -147,7 +147,7 @@ function FaucetItem({ address, publicKey, sendTransaction, onClose }: FaucetItem
           {solOk ? '✓' : '✗'} 0.05 SOL
         </span>
         {solOk && solSig && (
-          <a href={`https://solscan.io/tx/${solSig}?cluster=devnet`} target="_blank" rel="noreferrer"
+          <a href={solscanTx(solSig)} target="_blank" rel="noreferrer"
             style={{ fontSize: 10, color: 'var(--text3)', textDecoration: 'none' }}>↗</a>
         )}
         {solErr && <span style={{ color: 'var(--red)', fontSize: 10 }}>{solErr}</span>}
@@ -160,7 +160,7 @@ function FaucetItem({ address, publicKey, sendTransaction, onClose }: FaucetItem
             {usdpOk ? '✓' : '✗'} 10 000 USDP
           </span>
           {usdpOk && usdpSig && (
-            <a href={`https://solscan.io/tx/${usdpSig}?cluster=devnet`} target="_blank" rel="noreferrer"
+            <a href={solscanTx(usdpSig)} target="_blank" rel="noreferrer"
               style={{ fontSize: 10, color: 'var(--text3)', textDecoration: 'none' }}>↗</a>
           )}
           {usdpErr && (
@@ -331,6 +331,12 @@ function AdapterConnectButton() {
 // ── Public export ─────────────────────────────────────────────────────────────
 
 export function ConnectButton() {
+  const privyReady = usePrivyReady();
+  // While Privy is mounting (SSR → first client render), show a disabled
+  // placeholder so clicks don't open the wrong wallet-adapter modal.
+  if (PRIVY_ENABLED && !privyReady) {
+    return <button disabled style={btnStyle({ muted: true })}>Connect Wallet</button>;
+  }
   if (PRIVY_ENABLED) return <PrivyConnectButton />;
   return <AdapterConnectButton />;
 }

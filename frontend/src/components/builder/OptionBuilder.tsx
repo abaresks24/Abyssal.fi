@@ -7,7 +7,7 @@ import { useBlackScholes } from '@/hooks/useBlackScholes';
 import { useAFVR } from '@/hooks/useAFVR';
 import { usePacificaWS } from '@/hooks/usePacificaWS';
 import { PacificaOptionsClient } from '@/lib/anchor_client';
-import { VAULT_AUTHORITY, expiryToDate } from '@/lib/constants';
+import { VAULT_AUTHORITY, expiryToDate, solscanTx } from '@/lib/constants';
 import { ActionToggle } from './ActionToggle';
 import { SideToggle } from './SideToggle';
 import { ExpirySelector } from '@/components/chain/ExpirySelector';
@@ -166,7 +166,7 @@ export function OptionBuilder() {
         }}>
           Confirmed ·{' '}
           <a
-            href={`https://solscan.io/tx/${txSig}?cluster=devnet`}
+            href={solscanTx(txSig)}
             target="_blank"
             rel="noreferrer"
             style={{ color: 'var(--cyan)', textDecoration: 'none' }}

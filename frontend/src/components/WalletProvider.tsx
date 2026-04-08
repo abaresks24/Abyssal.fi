@@ -1,5 +1,5 @@
 'use client';
-import { type FC, type ReactNode, useMemo, useEffect, useRef, createContext, useContext } from 'react';
+import { type FC, type ReactNode, useMemo, useState, useEffect, useRef, createContext, useContext } from 'react';
 
 import { PrivyProvider, usePrivy } from '@privy-io/react-auth';
 import { toSolanaWalletConnectors, useWallets } from '@privy-io/react-auth/solana';
@@ -120,8 +120,16 @@ function PrivyInner({ children }: { children: ReactNode }) {
 }
 
 export const WalletContextProvider: FC<Props> = ({ children }) => {
-  if (!PRIVY_ENABLED) {
+  // PrivyProvider uses browser-only APIs and must not render during SSR —
+  // doing so causes a hydration mismatch that silently breaks all onClick
+  // handlers (clicks fire but nothing happens).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  if (!mounted || !PRIVY_ENABLED) {
     return (
+      // value=false → ConnectButton shows a "loading" placeholder,
+      // preventing clicks from opening the wrong (adapter) modal.
       <PrivyReadyContext.Provider value={false}>
         <SolanaAdapters>{children}</SolanaAdapters>
       </PrivyReadyContext.Provider>

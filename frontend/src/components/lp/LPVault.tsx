@@ -5,7 +5,7 @@ import { PublicKey, Connection } from '@solana/web3.js';
 import { getAssociatedTokenAddress } from '@solana/spl-token';
 import { useVaultStats } from '@/hooks/useVaultStats';
 import { PacificaOptionsClient, findVaultPDA, findVlpMintPDA } from '@/lib/anchor_client';
-import { VAULT_AUTHORITY, USDC_MINT, SOLANA_RPC } from '@/lib/constants';
+import { VAULT_AUTHORITY, USDC_MINT, SOLANA_RPC, solscanTx, solscanToken } from '@/lib/constants';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 
 function fmt(n: number, d = 2) {
@@ -218,7 +218,7 @@ export function LPVault() {
           {err   && <div style={{ marginTop: 10, fontSize: 12, color: 'var(--red)',   padding: '8px 12px', background: 'rgba(235,54,90,0.08)',  borderRadius: 4 }}>{err}</div>}
           {txSig && (
             <div style={{ marginTop: 10, fontSize: 12, color: 'var(--green)', padding: '8px 12px', background: 'rgba(2,199,123,0.08)', borderRadius: 4 }}>
-              Confirmed · <a href={`https://solscan.io/tx/${txSig}?cluster=devnet`} target="_blank" rel="noreferrer" style={{ color: 'var(--cyan)', textDecoration: 'none' }}>View on Solscan</a>
+              Confirmed · <a href={solscanTx(txSig)} target="_blank" rel="noreferrer" style={{ color: 'var(--cyan)', textDecoration: 'none' }}>View on Solscan</a>
             </div>
           )}
         </div>
@@ -259,7 +259,7 @@ export function LPVault() {
             <div style={{ background: 'var(--bg2)', border: '1px solid rgba(85,195,233,0.2)', borderRadius: 8, padding: '14px 18px' }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--cyan)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>vLP SPL Token</div>
               <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', wordBreak: 'break-all', marginBottom: 8 }}>{vlpMintAddress}</div>
-              <a href={`https://solscan.io/token/${vlpMintAddress}?cluster=devnet`} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: 'var(--cyan)', textDecoration: 'none' }}>View on Solscan ↗</a>
+              <a href={solscanToken(vlpMintAddress)} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: 'var(--cyan)', textDecoration: 'none' }}>View on Solscan ↗</a>
               <span style={{ fontSize: 10, color: 'var(--text3)', display: 'block', marginTop: 6 }}>Visible in Phantom · transferable wallet-to-wallet</span>
             </div>
           )}

@@ -3,12 +3,27 @@ import type { Market, Expiry } from '@/types';
 
 // ── Program / network ─────────────────────────────────────────────────────────
 
-export const PROGRAM_ID       = new PublicKey('CBkvR8SeN6j8RQKB7dSxG3dza2v71XHmWEe8LgfMW1hG');
+export const PROGRAM_ID       = new PublicKey(process.env.NEXT_PUBLIC_PROGRAM_ID ?? 'CBkvR8SeN6j8RQKB7dSxG3dza2v71XHmWEe8LgfMW1hG');
 export const USDC_MINT        = new PublicKey(process.env.NEXT_PUBLIC_USDC_MINT ?? 'USDPqRbLidFGufty2s3oizmDEKdqx7ePTqzDMbf5ZKM');
 export const SOLANA_RPC       = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
-export const VAULT_AUTHORITY  = 'AHWUeGsXbx9gd46SBS5SQK4rfQ8rGb1wWAzvZtJ6zdRg';
-export const VAULT_PDA        = '9tTji3sbkRPs8V3iqzxNBuX1dYonBXa2QnuHvcKwRMM6';
-export const VAULT_USDC       = '2eY9q7gahUaHkihGPzDAna8yxW6sBv2dkPjYRmimmWKm';
+export const VAULT_AUTHORITY  = process.env.NEXT_PUBLIC_VAULT_AUTHORITY ?? 'AHWUeGsXbx9gd46SBS5SQK4rfQ8rGb1wWAzvZtJ6zdRg';
+/** Pacifica faucet program — used by the devnet token faucet in ConnectButton */
+export const PACIFICA_FAUCET_PROGRAM_ID = process.env.NEXT_PUBLIC_PACIFICA_FAUCET_PROGRAM_ID ?? 'peRPsYCcB1J9jvrs29jiGdjkytxs8uHLmSPLKKP9ptm';
+
+// ── Solscan helpers (cluster-aware) ───────────────────────────────────────────
+
+/** 'devnet' | 'testnet' | undefined (mainnet) */
+export const SOLANA_CLUSTER = (() => {
+  const rpc = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? '';
+  if (rpc.includes('devnet'))  return 'devnet';
+  if (rpc.includes('testnet')) return 'testnet';
+  return undefined;
+})();
+
+const clusterParam = SOLANA_CLUSTER ? `?cluster=${SOLANA_CLUSTER}` : '';
+export const solscanTx      = (sig: string)    => `https://solscan.io/tx/${sig}${clusterParam}`;
+export const solscanAccount = (addr: string)   => `https://solscan.io/account/${addr}${clusterParam}`;
+export const solscanToken   = (mint: string)   => `https://solscan.io/token/${mint}${clusterParam}`;
 
 // ── Fees ──────────────────────────────────────────────────────────────────────
 

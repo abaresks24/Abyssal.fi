@@ -2,10 +2,9 @@
 import React from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { usePositions } from '@/hooks/usePositions';
-import { PROGRAM_ID } from '@/lib/constants';
+import { solscanAccount } from '@/lib/constants';
 
-const SOLSCAN = (pubkey: string) =>
-  `https://solscan.io/account/${pubkey}?cluster=devnet`;
+const SOLSCAN = solscanAccount;
 
 function fmt(n: number, d = 2) {
   return n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
