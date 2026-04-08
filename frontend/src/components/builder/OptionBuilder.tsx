@@ -149,7 +149,7 @@ export function OptionBuilder() {
         action={action}
         totalCost={totalPremium + fee}
         netReceive={netReceive}
-        disabled={strike <= 0 || premium <= 0 || loading}
+        disabled={strike <= 0 || size <= 0 || loading}
         onBuy={handleConfirm}
       />
 

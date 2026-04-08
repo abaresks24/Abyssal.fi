@@ -42,12 +42,17 @@ export const usePrivyReady = () => useContext(PrivyReadyContext);
 // its connect() returns immediately without showing a second popup.
 
 function PrivyAdapterSync() {
-  const { authenticated } = usePrivy();
+  const { authenticated, ready } = usePrivy();
   const { wallets: privyWallets } = useWallets();
   const { wallets: adapterWallets, select, connected, disconnect } = useWallet();
   const syncedRef = useRef<string | null>(null);
 
   useEffect(() => {
+    // Wait for Privy to finish loading before making any decisions.
+    // Without this guard, the effect fires with authenticated=false on first
+    // render and calls disconnect(), wiping publicKey before Privy loads.
+    if (!ready) return;
+
     if (!authenticated) {
       if (connected) {
         syncedRef.current = null;
@@ -75,7 +80,7 @@ function PrivyAdapterSync() {
     select(match.adapter.name as any);
     // Phantom is already approved — connect() resolves immediately, no popup
     match.adapter.connect().catch(() => { syncedRef.current = null; });
-  }, [authenticated, privyWallets, adapterWallets, select, connected, disconnect]);
+  }, [ready, authenticated, privyWallets, adapterWallets, select, connected, disconnect]);
 
   return null;
 }

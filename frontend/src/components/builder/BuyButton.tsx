@@ -22,14 +22,10 @@ export const BuyButton = React.memo(function BuyButton({ side, action, totalCost
     ? 'rgba(236,202,90,0.14)'
     : (side === 'call' ? 'rgba(2,199,123,0.15)' : 'rgba(235,54,90,0.15)');
 
-  const label = (() => {
-    if (disabled) return 'Enter parameters';
-    const sideLabel = side === 'call' ? 'Call' : 'Put';
-    if (isSell) {
-      return `Sell ${sideLabel} · receive $${netReceive.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    }
-    return `Buy ${sideLabel} · $${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  })();
+  const sideLabel = side === 'call' ? 'Call' : 'Put';
+  const label = isSell
+    ? `Sell ${sideLabel}${!disabled && netReceive > 0 ? ` · receive $${netReceive.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}`
+    : `Buy ${sideLabel}${!disabled && totalCost > 0 ? ` · $${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}`;
 
   if (!publicKey) {
     return (
