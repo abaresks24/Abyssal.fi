@@ -1,5 +1,5 @@
 'use client';
-import { type FC, type ReactNode, useMemo, useState, useEffect, useRef, createContext, useContext } from 'react';
+import { type FC, type ReactNode, useMemo, useEffect, useRef, createContext, useContext } from 'react';
 
 import { PrivyProvider, usePrivy } from '@privy-io/react-auth';
 import { toSolanaWalletConnectors, useWallets } from '@privy-io/react-auth/solana';
@@ -115,10 +115,7 @@ function PrivyInner({ children }: { children: ReactNode }) {
 }
 
 export const WalletContextProvider: FC<Props> = ({ children }) => {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
-  if (!mounted || !PRIVY_ENABLED) {
+  if (!PRIVY_ENABLED) {
     return (
       <PrivyReadyContext.Provider value={false}>
         <SolanaAdapters>{children}</SolanaAdapters>

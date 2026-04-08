@@ -7,7 +7,7 @@ import {
   PublicKey, Connection, Transaction, TransactionInstruction, SystemProgram,
 } from '@solana/web3.js';
 import { getAssociatedTokenAddressSync } from '@solana/spl-token';
-import { PRIVY_ENABLED, usePrivyReady } from '@/components/WalletProvider';
+import { PRIVY_ENABLED } from '@/components/WalletProvider';
 import { SOLANA_RPC } from '@/lib/constants';
 
 // ── Pacifica devnet program constants ────────────────────────────────────────
@@ -331,8 +331,7 @@ function AdapterConnectButton() {
 // ── Public export ─────────────────────────────────────────────────────────────
 
 export function ConnectButton() {
-  const privyReady = usePrivyReady();
-  if (PRIVY_ENABLED && privyReady) return <PrivyConnectButton />;
+  if (PRIVY_ENABLED) return <PrivyConnectButton />;
   return <AdapterConnectButton />;
 }
 

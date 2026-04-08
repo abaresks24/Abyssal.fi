@@ -1,7 +1,7 @@
 'use client';
 import React from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { ConnectButton } from '@/components/ui/ConnectButton';
 import type { Side, Action } from '@/types';
 
 interface Props {
@@ -14,9 +14,9 @@ interface Props {
 }
 
 export const BuyButton = React.memo(function BuyButton({ side, action, totalCost, netReceive, disabled, onBuy }: Props) {
-  const { connected } = useWallet();
+  const { publicKey } = useWallet();
 
-  const isSell = action === 'sell';
+  const isSell    = action === 'sell';
   const color     = isSell ? 'var(--amber)' : (side === 'call' ? 'var(--green)' : 'var(--red)');
   const dimColor  = isSell
     ? 'rgba(236,202,90,0.14)'
@@ -31,18 +31,13 @@ export const BuyButton = React.memo(function BuyButton({ side, action, totalCost
     return `Buy ${sideLabel} · $${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   })();
 
-  if (!connected) {
+  if (!publicKey) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ fontSize: 10, color: 'var(--text3)', textAlign: 'center' }}>
+        <div style={{ fontSize: 11, color: 'var(--text3)', textAlign: 'center' }}>
           Connect wallet to trade
         </div>
-        <WalletMultiButton style={{
-          width: '100%', padding: '10px 0', borderRadius: 5,
-          background: 'var(--bg3)', border: '1px solid var(--border2)',
-          color: 'var(--text)', fontSize: 13, fontFamily: 'var(--font)',
-          justifyContent: 'center',
-        }} />
+        <ConnectButton />
       </div>
     );
   }
