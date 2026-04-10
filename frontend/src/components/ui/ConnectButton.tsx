@@ -10,11 +10,13 @@ import {
 import { getAssociatedTokenAddressSync } from '@solana/spl-token';
 import bs58 from 'bs58';
 import { PRIVY_ENABLED } from '@/components/WalletProvider';
-import { SOLANA_RPC, USDC_MINT, PACIFICA_FAUCET_PROGRAM_ID, solscanTx } from '@/lib/constants';
+import { SOLANA_RPC, PACIFICA_FAUCET_PROGRAM_ID, solscanTx } from '@/lib/constants';
 
 // ── Pacifica devnet faucet constants ─────────────────────────────────────────
 const PACIFICA_PROGRAM_ID  = new PublicKey(PACIFICA_FAUCET_PROGRAM_ID);
-const USDP_MINT_PK         = USDC_MINT; // vault's settlement token (Pacifica USDP)
+// Hardcoded Pacifica USDP mint — NOT the same as USDC_MINT which may differ
+// between .env.local and production. This must match central_state.mint on-chain.
+const USDP_MINT_PK         = new PublicKey('USDPqRbLidFGufty2s3oizmDEKdqx7ePTqzDMbf5ZKM');
 const TOKEN_PROGRAM_ID     = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 const ASSOC_TOKEN_PROG_ID  = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
 const MINT_USDC_DISCRIMINATOR = Buffer.from([118, 144, 78, 118, 155, 214, 185, 186]);
