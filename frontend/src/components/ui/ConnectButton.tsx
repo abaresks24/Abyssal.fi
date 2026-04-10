@@ -7,7 +7,7 @@ import {
   PublicKey, Connection, Transaction, TransactionInstruction, SystemProgram,
 } from '@solana/web3.js';
 import { getAssociatedTokenAddressSync } from '@solana/spl-token';
-import { PRIVY_ENABLED, usePrivyReady } from '@/components/WalletProvider';
+import { PRIVY_ENABLED } from '@/components/WalletProvider';
 import { SOLANA_RPC, USDC_MINT, PACIFICA_FAUCET_PROGRAM_ID, solscanTx } from '@/lib/constants';
 
 // ── Pacifica devnet faucet constants ─────────────────────────────────────────
@@ -195,9 +195,7 @@ function FaucetItem({ address, publicKey, sendTransaction, onClose }: FaucetItem
 // and immediately close.
 
 function PrivyConnectButton() {
-  // ready is guaranteed by PrivyReadyBridge in WalletProvider — this component
-  // only renders when usePrivy().ready === true.
-  const { authenticated, login } = usePrivy();
+  const { authenticated, login, ready } = usePrivy();
   const { logout } = useLogout();
   const { wallets: privyWallets } = useWallets();
   const { publicKey, disconnect, sendTransaction } = useWallet();
@@ -229,8 +227,8 @@ function PrivyConnectButton() {
   if (!authenticated || !address) {
     return (
       <div style={{ position: 'relative' }}>
-        <button onClick={handleLogin} style={btnStyle({ primary: true })}>
-          Connect Wallet
+        <button onClick={ready ? handleLogin : undefined} style={btnStyle({ primary: true, muted: !ready })}>
+          {ready ? 'Connect Wallet' : 'Loading…'}
         </button>
         {loginErr && (
           <div style={{
@@ -352,12 +350,6 @@ function AdapterConnectButton() {
 // ── Public export ─────────────────────────────────────────────────────────────
 
 export function ConnectButton() {
-  const privyReady = usePrivyReady();
-  // While Privy is mounting (SSR → first client render), show a disabled
-  // placeholder so clicks don't open the wrong wallet-adapter modal.
-  if (PRIVY_ENABLED && !privyReady) {
-    return <button disabled style={btnStyle({ muted: true })}>Connect Wallet</button>;
-  }
   if (PRIVY_ENABLED) return <PrivyConnectButton />;
   return <AdapterConnectButton />;
 }

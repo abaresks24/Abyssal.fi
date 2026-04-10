@@ -1,7 +1,6 @@
 'use client';
 import React from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { ConnectButton } from '@/components/ui/ConnectButton';
 import type { Side, Action } from '@/types';
 
 interface Props {
@@ -29,12 +28,13 @@ export const BuyButton = React.memo(function BuyButton({ side, action, totalCost
 
   if (!publicKey) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ fontSize: 11, color: 'var(--text3)', textAlign: 'center' }}>
-          Connect wallet to trade
-        </div>
-        <ConnectButton />
-      </div>
+      <button disabled style={{
+        width: '100%', padding: '11px 0', borderRadius: 5,
+        border: '1px solid var(--border)', background: 'var(--bg2)',
+        color: 'var(--text3)', fontSize: 13, fontWeight: 600, cursor: 'not-allowed',
+      }}>
+        Connect wallet to trade
+      </button>
     );
   }
 
