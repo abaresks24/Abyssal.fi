@@ -23,6 +23,10 @@ export const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? '';
 export const PRIVY_ENABLED =
   PRIVY_APP_ID.length > 5 && !PRIVY_APP_ID.includes('YOUR_PRIVY');
 
+if (typeof window !== 'undefined') {
+  console.log('[Abyssal] PRIVY_APP_ID:', PRIVY_APP_ID, '| PRIVY_ENABLED:', PRIVY_ENABLED);
+}
+
 // Created at module level so Wallet Standard listeners persist across renders.
 const solanaConnectors = PRIVY_ENABLED
   ? toSolanaWalletConnectors({ shouldAutoConnect: false })

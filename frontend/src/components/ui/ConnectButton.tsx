@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { usePrivy, useLogout, useLogin } from '@privy-io/react-auth';
+import { usePrivy, useLogout } from '@privy-io/react-auth';
 import { useWallets } from '@privy-io/react-auth/solana';
 import { useWallet } from '@solana/wallet-adapter-react';
 import {
@@ -78,13 +78,11 @@ type FaucetItemProps = {
 
 /** Extract a human-readable message from a Solana/wallet error. */
 function extractErrorMsg(e: any): string {
-  // Anchor / program logs often contain the real reason
   const logs: string[] | undefined = e?.logs ?? e?.transactionError?.logs;
   if (logs?.length) {
     const errLine = logs.find((l: string) => l.includes('Error') || l.includes('error') || l.includes('failed'));
     if (errLine) return errLine.replace(/^Program \S+ /, '').substring(0, 120);
   }
-  // WalletSendTransactionError wraps the real cause
   if (e?.cause?.message) return e.cause.message;
   if (e?.message && e.message !== 'Unexpected error') return e.message;
   return 'Transaction failed — check browser console for details';
@@ -101,7 +99,6 @@ function FaucetItem({ address, publicKey, sendTransaction, onClose }: FaucetItem
     setState('loading');
     setSolErr(''); setUsdpErr('');
 
-    // Step 1 — SOL (server-side, no wallet needed)
     try {
       const sig = await requestSolFaucet(address);
       setSolSig(sig);
@@ -109,7 +106,6 @@ function FaucetItem({ address, publicKey, sendTransaction, onClose }: FaucetItem
       setSolErr(e?.message ?? 'SOL faucet failed');
     }
 
-    // Step 2 — USDP on-chain (needs wallet signature)
     if (publicKey && sendTransaction) {
       try {
         const sig = await claimUSDPFaucet(publicKey, sendTransaction);
@@ -135,13 +131,11 @@ function FaucetItem({ address, publicKey, sendTransaction, onClose }: FaucetItem
     );
   }
 
-  // state === 'done' — show results for each step independently
   const solOk  = !!solSig;
   const usdpOk = !!usdpSig;
 
   return (
     <div style={{ padding: '10px 12px', fontSize: 11, borderTop: '1px solid var(--border)' }}>
-      {/* SOL row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
         <span style={{ color: solOk ? 'var(--green)' : 'var(--red)', fontWeight: 600 }}>
           {solOk ? '✓' : '✗'} 0.05 SOL
@@ -153,7 +147,6 @@ function FaucetItem({ address, publicKey, sendTransaction, onClose }: FaucetItem
         {solErr && <span style={{ color: 'var(--red)', fontSize: 10 }}>{solErr}</span>}
       </div>
 
-      {/* USDP row */}
       {(publicKey && sendTransaction) ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
           <span style={{ color: usdpOk ? 'var(--green)' : 'var(--red)', fontWeight: 600 }}>
@@ -185,18 +178,19 @@ function FaucetItem({ address, publicKey, sendTransaction, onClose }: FaucetItem
 
 // ── Privy connect button ──────────────────────────────────────────────────────
 // login() opens Privy's modal which shows wallet options + email.
-// When the user selects a wallet (Phantom, Solflare…), Privy opens that
-// wallet's native approval popup directly.
 // After approval, PrivyAdapterSync (WalletProvider.tsx) bridges the connection
 // into useWallet() so anchor_client can sign transactions.
 //
-// IMPORTANT: Do NOT call wallet.connect() manually anywhere — Privy handles
-// the full connection flow. A second connect() call causes the popup to open
-// and immediately close.
+// IMPORTANT: Do NOT call wallet.connect() manually — Privy handles the full
+// connection flow. A second connect() call causes the popup to open and
+// immediately close.
+//
+// IMPORTANT: Do NOT pass login directly as onClick={login}. React passes
+// the MouseEvent as the first argument, and Privy may interpret it as
+// invalid LoginModalOptions, silently doing nothing. Always wrap it.
 
 function PrivyConnectButton() {
-  const { authenticated, ready } = usePrivy();
-  const { login } = useLogin();
+  const { authenticated, ready, login } = usePrivy();
   const { logout } = useLogout();
   const { wallets: privyWallets } = useWallets();
   const { publicKey, disconnect, sendTransaction } = useWallet();
@@ -204,6 +198,19 @@ function PrivyConnectButton() {
   const menuRef = useRef<HTMLDivElement>(null);
 
   const address: string | null = publicKey?.toBase58() ?? privyWallets[0]?.address ?? null;
+
+  const handleLogin = useCallback(() => {
+    console.log('[Abyssal] Connect clicked — ready:', ready, 'authenticated:', authenticated, 'login:', typeof login);
+    if (!ready) {
+      console.warn('[Abyssal] Privy not ready yet, ignoring click');
+      return;
+    }
+    try {
+      login();
+    } catch (err) {
+      console.error('[Abyssal] login() threw:', err);
+    }
+  }, [ready, authenticated, login]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -216,7 +223,7 @@ function PrivyConnectButton() {
 
   if (!authenticated || !address) {
     return (
-      <button onClick={login} style={btnStyle({ primary: true, muted: !ready })}>
+      <button onClick={handleLogin} disabled={!ready} style={btnStyle({ primary: true, muted: !ready })}>
         {ready ? 'Connect Wallet' : 'Loading…'}
       </button>
     );
