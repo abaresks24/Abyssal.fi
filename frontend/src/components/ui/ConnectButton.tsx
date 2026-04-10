@@ -5,6 +5,7 @@ import { useWallets, useSignAndSendTransaction } from '@privy-io/react-auth/sola
 import { useWallet } from '@solana/wallet-adapter-react';
 import {
   PublicKey, Connection, Transaction, TransactionInstruction, SystemProgram,
+  ComputeBudgetProgram,
 } from '@solana/web3.js';
 import { getAssociatedTokenAddressSync } from '@solana/spl-token';
 import bs58 from 'bs58';
@@ -24,6 +25,14 @@ async function claimUSDPFaucet(
   user: PublicKey,
   sendTransaction: (tx: Transaction, conn: Connection) => Promise<string>,
 ): Promise<string> {
+  const connection = new Connection(SOLANA_RPC, 'confirmed');
+
+  // Pre-flight: check user has SOL for fees + rent
+  const balance = await connection.getBalance(user);
+  if (balance < 10_000_000) { // ~0.01 SOL minimum for rent + fees
+    throw new Error('Not enough SOL for transaction fees — claim SOL first and retry');
+  }
+
   const [centralState] = PublicKey.findProgramAddressSync(
     [Buffer.from('central_state')],
     PACIFICA_PROGRAM_ID,
@@ -52,9 +61,17 @@ async function claimUSDPFaucet(
     data: Buffer.concat([MINT_USDC_DISCRIMINATOR, amountBuf]),
   });
 
-  const connection = new Connection(SOLANA_RPC, 'confirmed');
-  const tx = new Transaction().add(ix);
-  return sendTransaction(tx, connection);
+  // Add compute budget (matches successful on-chain txs)
+  const tx = new Transaction()
+    .add(ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }))
+    .add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1000 }))
+    .add(ix);
+
+  const sig = await sendTransaction(tx, connection);
+
+  // Wait for confirmation to ensure tokens actually arrive
+  await connection.confirmTransaction(sig, 'confirmed');
+  return sig;
 }
 
 // ── Devnet SOL faucet (server-side) ──────────────────────────────────────────
@@ -77,15 +94,22 @@ type FaucetItemProps = {
   onClose: () => void;
 };
 
-/** Extract a human-readable message from a Solana/wallet error. */
+/** Extract a human-readable message from a Solana/wallet/Privy error. */
 function extractErrorMsg(e: any): string {
+  // Anchor / program logs often contain the real reason
   const logs: string[] | undefined = e?.logs ?? e?.transactionError?.logs;
   if (logs?.length) {
     const errLine = logs.find((l: string) => l.includes('Error') || l.includes('error') || l.includes('failed'));
     if (errLine) return errLine.replace(/^Program \S+ /, '').substring(0, 120);
   }
+  // Privy errors wrap the real cause
   if (e?.cause?.message) return e.cause.message;
+  // SendTransactionError from web3.js
+  if (e?.transactionError?.message) return e.transactionError.message;
+  // Standard error message
   if (e?.message && e.message !== 'Unexpected error') return e.message;
+  // Fallback: stringify the error
+  try { return JSON.stringify(e).substring(0, 150); } catch {}
   return 'Transaction failed — check browser console for details';
 }
 
