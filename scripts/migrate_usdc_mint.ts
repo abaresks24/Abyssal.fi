@@ -11,7 +11,7 @@
 import * as anchor from '@coral-xyz/anchor';
 import { AnchorProvider, Program, web3 } from '@coral-xyz/anchor';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction } from '@solana/spl-token';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -76,8 +76,41 @@ async function main() {
     return;
   }
 
+  // Step 0: Empty the vault if it has tokens (required before closing)
+  const vaultUsdcBal = await connection.getTokenAccountBalance(vaultUsdc);
+  if (parseInt(vaultUsdcBal.value.amount) > 0) {
+    console.log(`\n[0/3] Vault has ${vaultUsdcBal.value.uiAmountString} old tokens — resetting vault first...`);
+
+    // Ensure authority has an ATA for the old mint
+    const oldMint = vaultState.usdcMint as PublicKey;
+    const authorityAta = await getAssociatedTokenAddress(oldMint, authority.publicKey);
+    const ataInfo = await connection.getAccountInfo(authorityAta);
+    if (!ataInfo) {
+      console.log('  Creating authority ATA for old mint...');
+      const createAtaIx = createAssociatedTokenAccountInstruction(
+        authority.publicKey, authorityAta, authority.publicKey, oldMint,
+      );
+      const tx0 = new web3.Transaction().add(createAtaIx);
+      const sig0 = await provider.sendAndConfirm(tx0);
+      console.log(`  ✓ ATA created: ${sig0}`);
+    }
+
+    const txReset = await program.methods
+      .resetVault()
+      .accounts({
+        vault,
+        usdcVault: vaultUsdc,
+        authorityUsdc: authorityAta,
+        authority: authority.publicKey,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      } as any)
+      .rpc();
+    console.log(`  ✓ Vault reset. tx: ${txReset}`);
+    await connection.confirmTransaction(txReset, 'confirmed');
+  }
+
   // Step 1: Close old vault_usdc + update usdc_mint
-  console.log('\n[1/2] Closing old vault_usdc + updating usdc_mint...');
+  console.log('\n[1/3] Closing old vault_usdc + updating usdc_mint...');
   const tx1 = await program.methods
     .migrateUsdcMintClose()
     .accounts({
@@ -90,12 +123,11 @@ async function main() {
     .rpc();
   console.log(`  ✓ Step 1 done. tx: ${tx1}`);
 
-  // Wait for confirmation
   await connection.confirmTransaction(tx1, 'confirmed');
   console.log('  ✓ Confirmed\n');
 
   // Step 2: Re-create vault_usdc with new mint
-  console.log('[2/2] Re-creating vault_usdc with Pacifica USDP mint...');
+  console.log('[2/3] Re-creating vault_usdc with Pacifica USDP mint...');
   const tx2 = await program.methods
     .reinitVaultUsdc()
     .accounts({
