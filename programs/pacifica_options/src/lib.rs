@@ -53,6 +53,16 @@ pub mod pacifica_options {
         instructions::initialize_vault::unpause_vault(ctx)
     }
 
+    /// Migrate vault USDC mint step 1: close old vault_usdc, update usdc_mint
+    pub fn migrate_usdc_mint_close(ctx: Context<MigrateUsdcMintClose>) -> Result<()> {
+        instructions::initialize_vault::migrate_usdc_mint_close(ctx)
+    }
+
+    /// Migrate vault USDC mint step 2: re-create vault_usdc for new mint
+    pub fn reinit_vault_usdc(ctx: Context<ReinitVaultUsdc>) -> Result<()> {
+        instructions::initialize_vault::reinit_vault_usdc(ctx)
+    }
+
     /// Initialize an IV oracle account for a given market
     pub fn initialize_iv_oracle(
         ctx: Context<InitializeIVOracle>,
