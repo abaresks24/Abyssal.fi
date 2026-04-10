@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { usePrivy, useLogout } from '@privy-io/react-auth';
+import { usePrivy, useLogout, useLogin } from '@privy-io/react-auth';
 import { useWallets } from '@privy-io/react-auth/solana';
 import { useWallet } from '@solana/wallet-adapter-react';
 import {
@@ -195,12 +195,21 @@ function FaucetItem({ address, publicKey, sendTransaction, onClose }: FaucetItem
 // and immediately close.
 
 function PrivyConnectButton() {
-  const { authenticated, login, ready } = usePrivy();
+  const { authenticated, ready } = usePrivy();
   const { logout } = useLogout();
+  const [loginErr, setLoginErr] = useState<string | null>(null);
+
+  const { login } = useLogin({
+    onComplete: () => setLoginErr(null),
+    onError: (err) => {
+      console.error('[Privy] login error:', err);
+      setLoginErr(String(err));
+    },
+  });
+
   const { wallets: privyWallets } = useWallets();
   const { publicKey, disconnect, sendTransaction } = useWallet();
   const [menuOpen, setMenuOpen]   = useState(false);
-  const [loginErr, setLoginErr]   = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const address: string | null = publicKey?.toBase58() ?? privyWallets[0]?.address ?? null;
@@ -214,20 +223,13 @@ function PrivyConnectButton() {
     return () => document.removeEventListener('mousedown', handler);
   }, [menuOpen]);
 
-  const handleLogin = useCallback(async () => {
-    setLoginErr(null);
-    try {
-      await login();
-    } catch (e: any) {
-      console.error('[Privy login]', e);
-      setLoginErr(e?.message ?? 'Login failed');
-    }
-  }, [login]);
-
   if (!authenticated || !address) {
     return (
       <div style={{ position: 'relative' }}>
-        <button onClick={ready ? handleLogin : undefined} style={btnStyle({ primary: true, muted: !ready })}>
+        <button
+          onClick={() => { setLoginErr(null); login(); }}
+          style={btnStyle({ primary: true, muted: !ready })}
+        >
           {ready ? 'Connect Wallet' : 'Loading…'}
         </button>
         {loginErr && (
@@ -236,6 +238,7 @@ function PrivyConnectButton() {
             background: 'var(--bg2)', border: '1px solid var(--red)',
             borderRadius: 6, padding: '6px 10px', fontSize: 11,
             color: 'var(--red)', whiteSpace: 'nowrap', zIndex: 1000,
+            maxWidth: 260,
           }}>
             {loginErr}
           </div>
