@@ -63,7 +63,7 @@ const nextConfig = {
     NEXT_PUBLIC_PACIFICA_API_URL:  process.env.NEXT_PUBLIC_PACIFICA_API_URL  || 'https://api.pacifica.finance',
     NEXT_PUBLIC_PACIFICA_WS_URL:   process.env.NEXT_PUBLIC_PACIFICA_WS_URL   || 'wss://ws.pacifica.finance',
     NEXT_PUBLIC_PROGRAM_ID:        process.env.NEXT_PUBLIC_PROGRAM_ID        || 'CBkvR8SeN6j8RQKB7dSxG3dza2v71XHmWEe8LgfMW1hG',
-    NEXT_PUBLIC_USDC_MINT:         process.env.NEXT_PUBLIC_USDC_MINT         || '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
+    NEXT_PUBLIC_USDC_MINT:         process.env.NEXT_PUBLIC_USDC_MINT         || 'USDPqRbLidFGufty2s3oizmDEKdqx7ePTqzDMbf5ZKM',
     NEXT_PUBLIC_SOLANA_RPC_URL:    process.env.NEXT_PUBLIC_SOLANA_RPC_URL    || 'https://api.devnet.solana.com',
     // Public keys — safe to hardcode (NEXT_PUBLIC_ = browser-visible by design)
     NEXT_PUBLIC_PRIVY_APP_ID:               process.env.NEXT_PUBLIC_PRIVY_APP_ID               || 'cmndd9hnc008p0bkybu6ys37h',
