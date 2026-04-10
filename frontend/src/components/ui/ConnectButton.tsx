@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { usePrivy, useLogout, useLogin } from '@privy-io/react-auth';
+import { usePrivy, useLogout } from '@privy-io/react-auth';
 import { useWallets } from '@privy-io/react-auth/solana';
 import { useWallet } from '@solana/wallet-adapter-react';
 import {
@@ -195,21 +195,11 @@ function FaucetItem({ address, publicKey, sendTransaction, onClose }: FaucetItem
 // and immediately close.
 
 function PrivyConnectButton() {
-  const { authenticated, ready } = usePrivy();
+  const { authenticated, ready, login } = usePrivy();
   const { logout } = useLogout();
-  const [loginErr, setLoginErr] = useState<string | null>(null);
-
-  const { login } = useLogin({
-    onComplete: () => setLoginErr(null),
-    onError: (err) => {
-      console.error('[Privy] login error:', err);
-      setLoginErr(String(err));
-    },
-  });
-
   const { wallets: privyWallets } = useWallets();
   const { publicKey, disconnect, sendTransaction } = useWallet();
-  const [menuOpen, setMenuOpen]   = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const address: string | null = publicKey?.toBase58() ?? privyWallets[0]?.address ?? null;
@@ -225,25 +215,9 @@ function PrivyConnectButton() {
 
   if (!authenticated || !address) {
     return (
-      <div style={{ position: 'relative' }}>
-        <button
-          onClick={() => { setLoginErr(null); login(); }}
-          style={btnStyle({ primary: true, muted: !ready })}
-        >
-          {ready ? 'Connect Wallet' : 'Loading…'}
-        </button>
-        {loginErr && (
-          <div style={{
-            position: 'absolute', top: 'calc(100% + 4px)', right: 0,
-            background: 'var(--bg2)', border: '1px solid var(--red)',
-            borderRadius: 6, padding: '6px 10px', fontSize: 11,
-            color: 'var(--red)', whiteSpace: 'nowrap', zIndex: 1000,
-            maxWidth: 260,
-          }}>
-            {loginErr}
-          </div>
-        )}
-      </div>
+      <button onClick={login} style={btnStyle({ primary: true, muted: !ready })}>
+        {ready ? 'Connect Wallet' : 'Loading…'}
+      </button>
     );
   }
 
