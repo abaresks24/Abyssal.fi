@@ -72,11 +72,12 @@ export function LPVault() {
         setVlpBalance(await client.getVlpBalance(authority, publicKey));
       } catch { setVlpBalance(0); }
 
-      // USDP balance — use the mint actually stored in the vault
+      // USDP balance — use the Pacifica USDP mint from constants (USDC_MINT).
+      // NOTE: the on-chain vault was initialized with a different mint; the balance
+      // shown here reflects the user's Pacifica USDP tokens available for deposit.
       try {
-        const usdcMint = await client.getVaultUsdcMint(authority);
-        const ata      = await getAssociatedTokenAddress(usdcMint, publicKey);
-        const bal      = await conn.getTokenAccountBalance(ata);
+        const ata = await getAssociatedTokenAddress(USDC_MINT, publicKey);
+        const bal = await conn.getTokenAccountBalance(ata);
         setUsdpBalance(parseFloat(bal.value.uiAmountString ?? '0'));
       } catch { setUsdpBalance(0); }
     } finally {
