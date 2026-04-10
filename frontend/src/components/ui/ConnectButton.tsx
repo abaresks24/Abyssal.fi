@@ -214,8 +214,8 @@ function PrivyConnectButton() {
   const { authenticated, ready, login } = usePrivy();
   const { logout } = useLogout();
   const { wallets: privyWallets } = useWallets();
-  const { signTransaction } = useSignTransaction();
-  const { publicKey: adapterPublicKey, disconnect, sendTransaction: adapterSendTx } = useWallet();
+  const { signTransaction: privySignTx } = useSignTransaction();
+  const { publicKey: adapterPublicKey, disconnect, signTransaction: adapterSignTx } = useWallet();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -225,30 +225,37 @@ function PrivyConnectButton() {
     ?? (privyWallet ? new PublicKey(privyWallet.address) : null);
   const address: string | null = effectivePublicKey?.toBase58() ?? null;
 
-  // sendTransaction wrapper: prefers wallet adapter, falls back to Privy sign + our RPC send
+  // Sign via wallet adapter or Privy, then ALWAYS send via our own RPC.
+  // This bypasses Privy/wallet internal RPCs that return -32603 on devnet.
   const sendTransaction = useCallback(async (tx: Transaction, connection: Connection): Promise<string> => {
-    if (adapterPublicKey) {
-      return adapterSendTx(tx, connection);
-    }
-    if (!privyWallet) throw new Error('No wallet connected');
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
     tx.recentBlockhash = blockhash;
-    tx.feePayer = new PublicKey(privyWallet.address);
-    const serialized = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
-    // Sign via Privy (opens wallet approval popup)
-    const { signedTransaction } = await signTransaction({
-      transaction: serialized,
-      wallet: privyWallet,
-      chain: 'solana:devnet',
-    });
-    // Send ourselves via our own RPC — bypasses Privy's internal RPC that returns -32603
-    const sig = await connection.sendRawTransaction(signedTransaction, {
+
+    let signed: Buffer;
+    if (adapterPublicKey && adapterSignTx) {
+      tx.feePayer = adapterPublicKey;
+      const signedTx = await adapterSignTx(tx);
+      signed = signedTx.serialize();
+    } else if (privyWallet) {
+      tx.feePayer = new PublicKey(privyWallet.address);
+      const serialized = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
+      const { signedTransaction } = await privySignTx({
+        transaction: serialized,
+        wallet: privyWallet,
+        chain: 'solana:devnet',
+      });
+      signed = Buffer.from(signedTransaction);
+    } else {
+      throw new Error('No wallet connected');
+    }
+
+    const sig = await connection.sendRawTransaction(signed, {
       skipPreflight: false,
       preflightCommitment: 'confirmed',
     });
     await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
     return sig;
-  }, [adapterPublicKey, adapterSendTx, privyWallet, signTransaction]);
+  }, [adapterPublicKey, adapterSignTx, privyWallet, privySignTx]);
 
   const handleLogin = useCallback(() => {
     if (!ready) return;
