@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { usePrivy, useLogout } from '@privy-io/react-auth';
+import { usePrivy, useLogout, useLogin } from '@privy-io/react-auth';
 import { useWallets } from '@privy-io/react-auth/solana';
 import { useWallet } from '@solana/wallet-adapter-react';
 import {
@@ -195,7 +195,8 @@ function FaucetItem({ address, publicKey, sendTransaction, onClose }: FaucetItem
 // and immediately close.
 
 function PrivyConnectButton() {
-  const { authenticated, ready, login } = usePrivy();
+  const { authenticated, ready } = usePrivy();
+  const { login } = useLogin();
   const { logout } = useLogout();
   const { wallets: privyWallets } = useWallets();
   const { publicKey, disconnect, sendTransaction } = useWallet();
