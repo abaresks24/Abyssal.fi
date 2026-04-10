@@ -1,12 +1,13 @@
 'use client';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { usePrivy, useLogout } from '@privy-io/react-auth';
-import { useWallets } from '@privy-io/react-auth/solana';
+import { useWallets, useSignAndSendTransaction } from '@privy-io/react-auth/solana';
 import { useWallet } from '@solana/wallet-adapter-react';
 import {
   PublicKey, Connection, Transaction, TransactionInstruction, SystemProgram,
 } from '@solana/web3.js';
 import { getAssociatedTokenAddressSync } from '@solana/spl-token';
+import bs58 from 'bs58';
 import { PRIVY_ENABLED } from '@/components/WalletProvider';
 import { SOLANA_RPC, USDC_MINT, PACIFICA_FAUCET_PROGRAM_ID, solscanTx } from '@/lib/constants';
 
@@ -193,24 +194,39 @@ function PrivyConnectButton() {
   const { authenticated, ready, login } = usePrivy();
   const { logout } = useLogout();
   const { wallets: privyWallets } = useWallets();
-  const { publicKey, disconnect, sendTransaction } = useWallet();
+  const { signAndSendTransaction } = useSignAndSendTransaction();
+  const { publicKey: adapterPublicKey, disconnect, sendTransaction: adapterSendTx } = useWallet();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const address: string | null = publicKey?.toBase58() ?? privyWallets[0]?.address ?? null;
+  // Use adapter publicKey if bridge worked, otherwise derive from Privy wallet
+  const privyWallet = privyWallets[0] ?? null;
+  const effectivePublicKey = adapterPublicKey
+    ?? (privyWallet ? new PublicKey(privyWallet.address) : null);
+  const address: string | null = effectivePublicKey?.toBase58() ?? null;
+
+  // sendTransaction wrapper: prefers wallet adapter, falls back to Privy native signing
+  const sendTransaction = useCallback(async (tx: Transaction, connection: Connection): Promise<string> => {
+    if (adapterPublicKey) {
+      return adapterSendTx(tx, connection);
+    }
+    if (!privyWallet) throw new Error('No wallet connected');
+    const { blockhash } = await connection.getLatestBlockhash('confirmed');
+    tx.recentBlockhash = blockhash;
+    tx.feePayer = new PublicKey(privyWallet.address);
+    const serialized = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
+    const result = await signAndSendTransaction({
+      transaction: serialized,
+      wallet: privyWallet,
+      chain: 'solana:devnet',
+    });
+    return bs58.encode(Buffer.from(result.signature));
+  }, [adapterPublicKey, adapterSendTx, privyWallet, signAndSendTransaction]);
 
   const handleLogin = useCallback(() => {
-    console.log('[Abyssal] Connect clicked — ready:', ready, 'authenticated:', authenticated, 'login:', typeof login);
-    if (!ready) {
-      console.warn('[Abyssal] Privy not ready yet, ignoring click');
-      return;
-    }
-    try {
-      login();
-    } catch (err) {
-      console.error('[Abyssal] login() threw:', err);
-    }
-  }, [ready, authenticated, login]);
+    if (!ready) return;
+    try { login(); } catch (err) { console.error('[Abyssal] login() threw:', err); }
+  }, [ready, login]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -248,7 +264,7 @@ function PrivyConnectButton() {
           <button onClick={() => { navigator.clipboard.writeText(address); setMenuOpen(false); }} style={menuItemStyle}>
             Copy address
           </button>
-          <FaucetItem address={address} publicKey={publicKey} sendTransaction={sendTransaction} onClose={() => setMenuOpen(false)} />
+          <FaucetItem address={address} publicKey={effectivePublicKey} sendTransaction={sendTransaction} onClose={() => setMenuOpen(false)} />
           <button onClick={() => { disconnect(); logout(); setMenuOpen(false); }} style={{ ...menuItemStyle, color: 'var(--red)' }}>
             Disconnect
           </button>
