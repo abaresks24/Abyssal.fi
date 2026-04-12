@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { IBM_Plex_Sans, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
 import { WalletContextProvider } from '@/components/WalletProvider';
+import { LanguageProvider } from '@/contexts/LanguageContext';
 
 const ibmPlexSans = IBM_Plex_Sans({
   subsets: ['latin'],
@@ -27,7 +28,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${ibmPlexSans.variable} ${ibmPlexMono.variable}`}>
       <body>
-        <WalletContextProvider>{children}</WalletContextProvider>
+        <WalletContextProvider>
+          <LanguageProvider>
+            {children}
+          </LanguageProvider>
+        </WalletContextProvider>
       </body>
     </html>
   );

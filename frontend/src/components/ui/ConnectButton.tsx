@@ -3,214 +3,12 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { usePrivy, useLogout } from '@privy-io/react-auth';
 import { useWallets, useSignTransaction } from '@privy-io/react-auth/solana';
 import { useWallet } from '@solana/wallet-adapter-react';
-import {
-  PublicKey, Connection, Transaction, TransactionInstruction, SystemProgram,
-  ComputeBudgetProgram,
-} from '@solana/web3.js';
-import { getAssociatedTokenAddressSync } from '@solana/spl-token';
-import bs58 from 'bs58';
+import { PublicKey, Connection, Transaction } from '@solana/web3.js';
 import { PRIVY_ENABLED } from '@/components/WalletProvider';
-import { SOLANA_RPC, PACIFICA_FAUCET_PROGRAM_ID, solscanTx } from '@/lib/constants';
-
-// ── Pacifica devnet faucet constants ─────────────────────────────────────────
-const PACIFICA_PROGRAM_ID  = new PublicKey(PACIFICA_FAUCET_PROGRAM_ID);
-// Hardcoded Pacifica USDP mint — NOT the same as USDC_MINT which may differ
-// between .env.local and production. This must match central_state.mint on-chain.
-const USDP_MINT_PK         = new PublicKey('USDPqRbLidFGufty2s3oizmDEKdqx7ePTqzDMbf5ZKM');
-const TOKEN_PROGRAM_ID     = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const ASSOC_TOKEN_PROG_ID  = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
-const MINT_USDC_DISCRIMINATOR = Buffer.from([118, 144, 78, 118, 155, 214, 185, 186]);
-const USDP_CLAIM_AMOUNT    = BigInt(10_000 * 1_000_000); // 10 000 USDP (6 decimals)
-
-/** Calls Pacifica's on-chain mint_test_usdc instruction — user wallet must sign. */
-async function claimUSDPFaucet(
-  user: PublicKey,
-  sendTransaction: (tx: Transaction, conn: Connection) => Promise<string>,
-): Promise<string> {
-  const connection = new Connection(SOLANA_RPC, 'confirmed');
-
-  // Pre-flight: check user has SOL for fees + rent
-  const balance = await connection.getBalance(user);
-  if (balance < 10_000_000) { // ~0.01 SOL minimum for rent + fees
-    throw new Error('Not enough SOL for transaction fees — claim SOL first and retry');
-  }
-
-  const [centralState] = PublicKey.findProgramAddressSync(
-    [Buffer.from('central_state')],
-    PACIFICA_PROGRAM_ID,
-  );
-  const [userAccount] = PublicKey.findProgramAddressSync(
-    [Buffer.from('user_account'), user.toBuffer()],
-    PACIFICA_PROGRAM_ID,
-  );
-  const userUSDPATA = getAssociatedTokenAddressSync(USDP_MINT_PK, user, false);
-
-  const amountBuf = Buffer.alloc(8);
-  amountBuf.writeBigUInt64LE(USDP_CLAIM_AMOUNT);
-
-  const ix = new TransactionInstruction({
-    programId: PACIFICA_PROGRAM_ID,
-    keys: [
-      { pubkey: user,              isSigner: true,  isWritable: true  },
-      { pubkey: userAccount,       isSigner: false, isWritable: true  },
-      { pubkey: userUSDPATA,       isSigner: false, isWritable: true  },
-      { pubkey: USDP_MINT_PK,      isSigner: false, isWritable: true  },
-      { pubkey: centralState,      isSigner: false, isWritable: false },
-      { pubkey: ASSOC_TOKEN_PROG_ID, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_PROGRAM_ID,  isSigner: false, isWritable: false },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-    ],
-    data: Buffer.concat([MINT_USDC_DISCRIMINATOR, amountBuf]),
-  });
-
-  // Add compute budget (matches successful on-chain txs)
-  const tx = new Transaction()
-    .add(ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }))
-    .add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1000 }))
-    .add(ix);
-
-  return sendTransaction(tx, connection);
-}
-
-// ── Devnet SOL faucet (server-side) ──────────────────────────────────────────
-
-async function requestSolFaucet(wallet: string): Promise<string> {
-  const res = await fetch('/api/faucet', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? 'Faucet failed');
-  return data.signature as string;
-}
-
-type FaucetItemProps = {
-  address: string;
-  publicKey: PublicKey | null;
-  sendTransaction: ((tx: Transaction, conn: Connection) => Promise<string>) | null;
-  onClose: () => void;
-};
-
-/** Extract a human-readable message from a Solana/wallet/Privy error. */
-function extractErrorMsg(e: any): string {
-  // Anchor / program logs often contain the real reason
-  const logs: string[] | undefined = e?.logs ?? e?.transactionError?.logs;
-  if (logs?.length) {
-    const errLine = logs.find((l: string) => l.includes('Error') || l.includes('error') || l.includes('failed'));
-    if (errLine) return errLine.replace(/^Program \S+ /, '').substring(0, 120);
-  }
-  // Privy errors wrap the real cause
-  if (e?.cause?.message) return e.cause.message;
-  // SendTransactionError from web3.js
-  if (e?.transactionError?.message) return e.transactionError.message;
-  // Standard error message
-  if (e?.message && e.message !== 'Unexpected error') return e.message;
-  // Fallback: stringify the error
-  try { return JSON.stringify(e).substring(0, 150); } catch {}
-  return 'Transaction failed — check browser console for details';
-}
-
-function FaucetItem({ address, publicKey, sendTransaction, onClose }: FaucetItemProps) {
-  const [state, setState]       = useState<'idle' | 'loading' | 'done'>('idle');
-  const [solSig, setSolSig]     = useState('');
-  const [usdpSig, setUsdpSig]   = useState('');
-  const [solErr, setSolErr]     = useState('');
-  const [usdpErr, setUsdpErr]   = useState('');
-
-  const handleClick = useCallback(async () => {
-    setState('loading');
-    setSolErr(''); setUsdpErr('');
-
-    try {
-      const sig = await requestSolFaucet(address);
-      setSolSig(sig);
-    } catch (e: any) {
-      setSolErr(e?.message ?? 'SOL faucet failed');
-    }
-
-    if (publicKey && sendTransaction) {
-      try {
-        const sig = await claimUSDPFaucet(publicKey, sendTransaction);
-        setUsdpSig(sig);
-      } catch (e: any) {
-        console.error('[USDP faucet]', e);
-        setUsdpErr(extractErrorMsg(e));
-      }
-    }
-
-    setState('done');
-  }, [address, publicKey, sendTransaction]);
-
-  if (state === 'idle' || state === 'loading') {
-    return (
-      <button
-        onClick={handleClick}
-        disabled={state === 'loading'}
-        style={{ ...menuItemStyle, color: 'var(--cyan)', opacity: state === 'loading' ? 0.6 : 1 }}
-      >
-        {state === 'loading' ? 'Claiming…' : 'Get devnet tokens (SOL + USDP)'}
-      </button>
-    );
-  }
-
-  const solOk  = !!solSig;
-  const usdpOk = !!usdpSig;
-
-  return (
-    <div style={{ padding: '10px 12px', fontSize: 11, borderTop: '1px solid var(--border)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-        <span style={{ color: solOk ? 'var(--green)' : 'var(--red)', fontWeight: 600 }}>
-          {solOk ? '✓' : '✗'} 0.05 SOL
-        </span>
-        {solOk && solSig && (
-          <a href={solscanTx(solSig)} target="_blank" rel="noreferrer"
-            style={{ fontSize: 10, color: 'var(--text3)', textDecoration: 'none' }}>↗</a>
-        )}
-        {solErr && <span style={{ color: 'var(--red)', fontSize: 10 }}>{solErr}</span>}
-      </div>
-
-      {(publicKey && sendTransaction) ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-          <span style={{ color: usdpOk ? 'var(--green)' : 'var(--red)', fontWeight: 600 }}>
-            {usdpOk ? '✓' : '✗'} 10 000 USDP
-          </span>
-          {usdpOk && usdpSig && (
-            <a href={solscanTx(usdpSig)} target="_blank" rel="noreferrer"
-              style={{ fontSize: 10, color: 'var(--text3)', textDecoration: 'none' }}>↗</a>
-          )}
-          {usdpErr && (
-            <span style={{ color: 'var(--red)', fontSize: 10, wordBreak: 'break-word' }}>{usdpErr}</span>
-          )}
-        </div>
-      ) : (
-        <div style={{ color: 'var(--text3)', fontSize: 10, marginBottom: 6 }}>
-          USDP: wallet not ready (reconnect and retry)
-        </div>
-      )}
-
-      <button
-        onClick={onClose}
-        style={{ fontSize: 10, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-      >
-        Close
-      </button>
-    </div>
-  );
-}
+import { SOLANA_RPC } from '@/lib/constants';
+import { useAutoFaucet } from '@/hooks/useAutoFaucet';
 
 // ── Privy connect button ──────────────────────────────────────────────────────
-// login() opens Privy's modal which shows wallet options + email.
-// After approval, PrivyAdapterSync (WalletProvider.tsx) bridges the connection
-// into useWallet() so anchor_client can sign transactions.
-//
-// IMPORTANT: Do NOT call wallet.connect() manually — Privy handles the full
-// connection flow. A second connect() call causes the popup to open and
-// immediately close.
-//
-// IMPORTANT: Do NOT pass login directly as onClick={login}. React passes
-// the MouseEvent as the first argument, and Privy may interpret it as
-// invalid LoginModalOptions, silently doing nothing. Always wrap it.
 
 function PrivyConnectButton() {
   const { authenticated, ready, login } = usePrivy();
@@ -221,14 +19,11 @@ function PrivyConnectButton() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Use adapter publicKey if bridge worked, otherwise derive from Privy wallet
   const privyWallet = privyWallets[0] ?? null;
   const effectivePublicKey = adapterPublicKey
     ?? (privyWallet ? new PublicKey(privyWallet.address) : null);
   const address: string | null = effectivePublicKey?.toBase58() ?? null;
 
-  // Sign via wallet adapter or Privy, then ALWAYS send via our own RPC.
-  // This bypasses Privy/wallet internal RPCs that return -32603 on devnet.
   const sendTransaction = useCallback(async (tx: Transaction, connection: Connection): Promise<string> => {
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
     tx.recentBlockhash = blockhash;
@@ -258,6 +53,9 @@ function PrivyConnectButton() {
     await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
     return sig;
   }, [adapterPublicKey, adapterSignTx, privyWallet, privySignTx]);
+
+  // Auto-faucet: send SOL + 1000 USDP on first connection
+  useAutoFaucet(address, effectivePublicKey, sendTransaction);
 
   const handleLogin = useCallback(() => {
     if (!ready) return;
@@ -293,14 +91,13 @@ function PrivyConnectButton() {
         </svg>
       </button>
       {menuOpen && (
-        <DropdownMenu onClose={() => setMenuOpen(false)}>
+        <DropdownMenu>
           <div style={{ padding: '8px 12px', fontSize: 10, color: 'var(--text2)', fontFamily: 'var(--mono)', borderBottom: '1px solid var(--border)', wordBreak: 'break-all' }}>
             {address}
           </div>
           <button onClick={() => { navigator.clipboard.writeText(address); setMenuOpen(false); }} style={menuItemStyle}>
             Copy address
           </button>
-          <FaucetItem address={address} publicKey={effectivePublicKey} sendTransaction={sendTransaction} onClose={() => setMenuOpen(false)} />
           <button onClick={() => { disconnect(); logout(); setMenuOpen(false); }} style={{ ...menuItemStyle, color: 'var(--red)' }}>
             Disconnect
           </button>
@@ -317,6 +114,9 @@ function AdapterConnectButton() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const address = publicKey?.toBase58() ?? null;
+
+  // Auto-faucet: send SOL + 1000 USDP on first connection
+  useAutoFaucet(address, publicKey, sendTransaction);
 
   useEffect(() => {
     const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
@@ -337,7 +137,7 @@ function AdapterConnectButton() {
           {connecting ? 'Connecting…' : 'Connect Wallet'}
         </button>
         {open && (
-          <DropdownMenu onClose={() => setOpen(false)}>
+          <DropdownMenu>
             {wallets.length === 0 ? (
               <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text2)' }}>
                 No wallet detected.{' '}
@@ -373,10 +173,9 @@ function AdapterConnectButton() {
         <span style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{short}</span>
       </button>
       {open && (
-        <DropdownMenu onClose={() => setOpen(false)}>
+        <DropdownMenu>
           <div style={{ padding: '8px 12px', fontSize: 10, color: 'var(--text2)', fontFamily: 'var(--mono)', borderBottom: '1px solid var(--border)', wordBreak: 'break-all' }}>{address}</div>
           <button onClick={() => { navigator.clipboard.writeText(address); setOpen(false); }} style={menuItemStyle}>Copy address</button>
-          <FaucetItem address={address} publicKey={publicKey} sendTransaction={sendTransaction} onClose={() => setOpen(false)} />
           <button onClick={() => { disconnect(); setOpen(false); }} style={{ ...menuItemStyle, color: 'var(--red)' }}>Disconnect</button>
         </DropdownMenu>
       )}
@@ -393,7 +192,7 @@ export function ConnectButton() {
 
 // ── Shared UI ─────────────────────────────────────────────────────────────────
 
-function DropdownMenu({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+function DropdownMenu({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
       position: 'absolute', top: 'calc(100% + 4px)', right: 0, minWidth: 200,

@@ -167,7 +167,7 @@ export function LPVault() {
           {tab === 'deposit' && publicKey && (
             <div style={{ fontSize: 11, color: 'var(--text3)', padding: '7px 10px', marginBottom: 12, background: 'rgba(85,195,233,0.06)', border: '1px solid rgba(85,195,233,0.15)', borderRadius: 5, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <span>Balance: <span style={{ color: 'var(--text)', fontFamily: 'var(--mono)', fontWeight: 600 }}>{usdpBalance === null ? '…' : `${fmt(usdpBalance)} USDP`}</span></span>
-              <span style={{ flex: 1, textAlign: 'right' }}>No USDP? Use wallet menu → &quot;Get devnet tokens&quot;</span>
+              <span style={{ flex: 1, textAlign: 'right' }}>USDP is auto-credited on first wallet connection</span>
             </div>
           )}
 
@@ -212,7 +212,7 @@ export function LPVault() {
 
           {tab === 'deposit' && publicKey && usdpBalance === 0 && (
             <div style={{ marginTop: 8, fontSize: 11, color: 'var(--amber)', padding: '7px 10px', background: 'rgba(236,202,90,0.08)', borderRadius: 4 }}>
-              You have no USDP. Use wallet menu → &ldquo;Get devnet tokens (SOL + USDP)&rdquo;.
+              You have no USDP. Reconnect your wallet to receive 1000 USDP automatically.
             </div>
           )}
 

@@ -37,27 +37,37 @@ Abyssal.fi/
 ├── frontend/                    # Next.js 14 App Router (TypeScript)
 │   ├── src/
 │   │   ├── app/
-│   │   │   ├── layout.tsx       # Root layout, fonts, dark class
-│   │   │   ├── globals.css      # CSS variables (Pacifica palette)
-│   │   │   └── page.tsx         # Main page (tabs: Trade / Positions / Liquidity / Analytics)
+│   │   │   ├── layout.tsx       # Root layout, fonts, WalletProvider + LanguageProvider
+│   │   │   ├── globals.css      # CSS variables (Pacifica palette, dark/light)
+│   │   │   ├── page.tsx         # Landing page (animated buttons, i18n, language selector)
+│   │   │   ├── app/page.tsx     # Trading app (dynamic import of TradingLayout)
+│   │   │   ├── docs/page.tsx    # Documentation page (10 sections, separate route)
+│   │   │   ├── learn/page.tsx   # Educational content (9 chapters, perps + options)
+│   │   │   └── api/
+│   │   │       ├── faucet/route.ts        # SOL faucet (server-side)
+│   │   │       └── pacifica/[...path]/route.ts  # Pacifica API proxy
 │   │   ├── components/
-│   │   │   ├── Header.tsx
-│   │   │   ├── OptionSelector.tsx
-│   │   │   ├── PriceQuote.tsx
-│   │   │   ├── GreeksDashboard.tsx
-│   │   │   ├── PositionsList.tsx
-│   │   │   ├── IVSurface.tsx
-│   │   │   ├── LiquidityPanel.tsx
-│   │   │   ├── TradeModal.tsx
-│   │   │   └── WalletProvider.tsx
+│   │   │   ├── ui/
+│   │   │   │   ├── ConnectButton.tsx    # Wallet connect with auto-faucet
+│   │   │   │   ├── AnimatedButton.tsx   # Glassmorphic animated button
+│   │   │   │   └── LoadingSpinner.tsx
+│   │   │   ├── layout/
+│   │   │   │   ├── Nav.tsx              # Header with tabs, language, theme toggle
+│   │   │   │   └── TradingLayout.tsx    # Responsive 3-panel trading UI
+│   │   │   └── WalletProvider.tsx       # Privy + wallet-adapter bridge
+│   │   ├── contexts/
+│   │   │   └── LanguageContext.tsx       # i18n context (en/fr/es/zh)
 │   │   ├── hooks/
-│   │   │   ├── usePacificaPrice.ts  # WebSocket price feed
-│   │   │   ├── useGreeks.ts
-│   │   │   ├── useOptions.ts
-│   │   │   └── useWallet.ts
+│   │   │   ├── useAutoFaucet.ts   # Auto SOL + USDP on first wallet connection
+│   │   │   ├── usePacificaWS.ts   # WebSocket price feed
+│   │   │   ├── useBlackScholes.ts
+│   │   │   ├── useAFVR.ts
+│   │   │   ├── usePositions.ts
+│   │   │   └── useBreakpoint.ts
 │   │   ├── lib/
 │   │   │   ├── anchor_client.ts     # All on-chain calls (Program<PacificaOptions>)
 │   │   │   ├── constants.ts         # PROGRAM_ID, USDC_MINT, SOLANA_RPC, SCALE, fees
+│   │   │   ├── i18n.ts             # Translation strings (en/fr/es/zh)
 │   │   │   ├── black_scholes.ts     # Client-side BS for live previews
 │   │   │   ├── pacifica_api.ts      # REST/WS wrapper for Pacifica price feed
 │   │   │   └── pacifica_options_idl.json
@@ -300,16 +310,23 @@ cd iv_engine
 - Frontend: `anchor_client.ts` wired to real program (real PDAs, real IDL)
 - IV engine: AFVR calculator
 - IV engine: CoinGecko price fallback
+- **Frontend: redesigned landing page** — animated buttons (Launch App, Learn, Docs), stats bar, language selector, glassmorphism effects
+- **Frontend: /docs page** — separate documentation route with 10 sections (overview, architecture, options, NFT, hedging, LP, fees, markets, IV, contracts)
+- **Frontend: /learn page** — educational content with 9 chapters covering derivatives, perpetuals, funding rates, options basics, calls, puts, Greeks, strategies, and trading on Abyssal.fi
+- **NFT position system** — `buyOption` mints NFT, `sellOption` burns/transfers NFT, `exerciseOption` burns NFT + pays payoff
+- **Auto-faucet** — wallet auto-receives 0.05 SOL + 1000 USDP on first connection (via `useAutoFaucet` hook). Manual "Get devnet tokens" button removed
+- **Delta hedging model documented** — protocol takes long position on call buys, short on put buys; hedge funded from vault; LPs earn fees + unexercised premiums
+- **Full i18n** — 4 locales (en/fr/es/zh) covering landing, nav, builder, portfolio, LP vault, docs sidebar, learn sidebar
+- **Improved light mode** — clean white theme with proper contrast, softer colors, readable text
+- **AnimatedButton component** — reusable glassmorphic button with hover animations (primary/secondary/outline variants)
 
 ### 🔲 TODO
 1. **Initialize AMM pools** — vault + oracles are live but no pools yet; call `initializeAmmPool` per series before users can trade
 2. **IV engine on-chain submission** — wire `_submit_iv_update()` with anchorpy to actually call `update_iv_params`
-3. **Frontend: connect `handleConfirmTrade` to `anchor_client.buyOption`** — currently mock
-4. **Frontend: fetch real positions** — currently uses `MOCK_POSITIONS`; need to `getProgramAccounts` for `OptionPosition` by owner
-5. **Frontend: fetch real AMM pool data** — `LiquidityPanel` uses mock pools
-6. **`usePacificaPrice` hook** — currently REST polling; should use WebSocket for live ticks
-7. **Settlement** — `settle_expired` instruction exists but keeper doesn't yet call it on-chain
-8. **Delta rebalancing** — `rebalance_delta` instruction exists but keeper doesn't yet call it on-chain
+3. **Frontend: fetch real AMM pool data** — `LiquidityPanel` uses mock pools
+4. **Settlement** — `settle_expired` instruction exists but keeper doesn't yet call it on-chain
+5. **Delta rebalancing** — `rebalance_delta` instruction exists but keeper doesn't yet call it on-chain
+6. **Translate docs/learn content** — currently only sidebar labels are translated; full page content remains in English
 
 ---
 
