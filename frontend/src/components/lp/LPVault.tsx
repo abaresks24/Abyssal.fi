@@ -1,9 +1,9 @@
 'use client';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey, Connection } from '@solana/web3.js';
 import { getAssociatedTokenAddress } from '@solana/spl-token';
 import { useEffectiveWallet } from '@/hooks/useEffectiveWallet';
+import { useSignerWallet } from '@/hooks/useSignerWallet';
 import { useVaultStats } from '@/hooks/useVaultStats';
 import { PacificaOptionsClient, findVaultPDA, findVlpMintPDA } from '@/lib/anchor_client';
 import { VAULT_AUTHORITY, SOLANA_RPC, solscanTx, solscanToken } from '@/lib/constants';
@@ -42,8 +42,7 @@ function StatCard({ label, value, sub, accent }: {
 
 export function LPVault() {
   const { publicKey } = useEffectiveWallet();
-  // useWallet() for signing transactions — PacificaOptionsClient needs signTransaction
-  const adapterWallet = useWallet();
+  const { walletForClient, ready: signerReady } = useSignerWallet();
   const stats  = useVaultStats();
   const { isMobile } = useBreakpoint();
 
@@ -104,9 +103,8 @@ export function LPVault() {
 
   const handleSubmit = async () => {
     if (!publicKey || !amount) return;
-    // Check adapter wallet is ready for signing
-    if (!adapterWallet.publicKey || !adapterWallet.signTransaction) {
-      setErr('Wallet is syncing — please wait a moment and retry');
+    if (!signerReady) {
+      setErr('Wallet not ready — please wait a moment and retry');
       return;
     }
     const val = parseFloat(amount);
@@ -117,7 +115,7 @@ export function LPVault() {
     }
     setLoading(true); setErr(null); setTxSig(null);
     try {
-      const client    = new PacificaOptionsClient(adapterWallet);
+      const client    = new PacificaOptionsClient(walletForClient as any);
       const authority = new PublicKey(VAULT_AUTHORITY);
       const sig = tab === 'deposit'
         ? await client.depositVault({ vaultAuthority: authority, usdcAmount: val })
