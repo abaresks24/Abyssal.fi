@@ -69,6 +69,30 @@ export async function POST(req: NextRequest) {
       throw new Error('Filler SOL balance too low — contact admin');
     }
 
+    // ── Guard: skip if recipient already has USDP ─────────────────────────────
+
+    const fillerUsdpAta = await getAssociatedTokenAddress(USDP_MINT, filler.publicKey);
+    const recipientUsdpAta = await getAssociatedTokenAddress(USDP_MINT, recipient);
+
+    const recipientAtaInfo = await connection.getAccountInfo(recipientUsdpAta);
+    if (recipientAtaInfo) {
+      // ATA exists — check balance; skip if they already have USDP
+      try {
+        const bal = await connection.getTokenAccountBalance(recipientUsdpAta);
+        const uiAmount = parseFloat(bal.value.uiAmountString ?? '0');
+        if (uiAmount >= 100) {
+          return NextResponse.json({
+            success: true,
+            signature: 'already_funded',
+            recipient: recipient.toBase58(),
+            solAmount: 0,
+            usdpAmount: 0,
+            message: `Wallet already has ${uiAmount} USDP — skipped`,
+          });
+        }
+      } catch {}
+    }
+
     // ── Build transaction: SOL transfer + USDP transfer ──────────────────────
 
     const tx = new Transaction();
@@ -81,13 +105,6 @@ export async function POST(req: NextRequest) {
         lamports: SOL_FILL,
       }),
     );
-
-    // 2. USDP transfer — create recipient ATA if needed, then transfer
-    const fillerUsdpAta = await getAssociatedTokenAddress(USDP_MINT, filler.publicKey);
-    const recipientUsdpAta = await getAssociatedTokenAddress(USDP_MINT, recipient);
-
-    // Check if recipient already has an ATA
-    const recipientAtaInfo = await connection.getAccountInfo(recipientUsdpAta);
     if (!recipientAtaInfo) {
       // Create ATA for recipient (filler pays rent)
       tx.add(

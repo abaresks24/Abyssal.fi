@@ -27,6 +27,14 @@ function markFauceted(address: string) {
   } catch {}
 }
 
+function unmarkFauceted(address: string) {
+  try {
+    const done = JSON.parse(localStorage.getItem(FAUCET_DONE_KEY) ?? '{}');
+    delete done[address];
+    localStorage.setItem(FAUCET_DONE_KEY, JSON.stringify(done));
+  } catch {}
+}
+
 /**
  * Calls the server-side faucet which sends SOL + 1000 USDP
  * directly from the filler wallet. No client signing needed.
@@ -64,13 +72,16 @@ export function useAutoFaucet(
     if (runningRef.current) return;
     runningRef.current = true;
 
+    // Mark BEFORE calling server — prevents double-faucet on page refresh
+    markFauceted(address);
+
     try {
       const result = await requestFaucet(address);
-      markFauceted(address);
       console.log(`[AutoFaucet] Success: ${result.solAmount} SOL + ${result.usdpAmount} USDP sent to`, address);
     } catch (e) {
       console.warn('[AutoFaucet] Failed:', e);
-      // Don't mark as fauceted on failure — retry on next connection
+      // Remove mark so it retries next time
+      unmarkFauceted(address);
     } finally {
       runningRef.current = false;
     }
