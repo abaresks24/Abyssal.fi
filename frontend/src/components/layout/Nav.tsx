@@ -1,12 +1,13 @@
 'use client';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { ConnectButton } from '@/components/ui/ConnectButton';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useTranslation } from '@/contexts/LanguageContext';
 import { type Locale, LOCALE_LABELS } from '@/lib/i18n';
 
-export type View = 'trade' | 'portfolio' | 'lp' | 'marketplace' | 'leaderboard' | 'analytics' | 'docs';
+export type View = 'trade' | 'portfolio' | 'lp' | 'marketplace' | 'leaderboard' | 'analytics';
 
 interface NavProps {
   view: View;
@@ -124,6 +125,8 @@ export const Nav = React.memo(function Nav({ view, setView }: NavProps) {
   const { isMobile } = useBreakpoint();
   const { t } = useTranslation();
 
+  const router = useRouter();
+
   const TABS: { id: View; label: string; short: string }[] = [
     { id: 'trade',       label: t.nav.trade,       short: t.nav.tradeShort       },
     { id: 'portfolio',   label: t.nav.portfolio,   short: t.nav.portfolioShort   },
@@ -131,7 +134,12 @@ export const Nav = React.memo(function Nav({ view, setView }: NavProps) {
     { id: 'marketplace', label: t.nav.marketplace, short: t.nav.marketplaceShort },
     { id: 'leaderboard', label: t.nav.leaderboard, short: t.nav.leaderboardShort },
     { id: 'analytics',   label: t.nav.analytics,   short: t.nav.analyticsShort   },
-    { id: 'docs',        label: t.nav.docs,        short: t.nav.docsShort        },
+  ];
+
+  // External page links (open in same window)
+  const LINKS: { label: string; short: string; href: string }[] = [
+    { label: t.learn?.title ?? 'Learn', short: 'Learn', href: '/learn' },
+    { label: t.nav.docs,                short: t.nav.docsShort, href: '/docs' },
   ];
 
   return (
@@ -212,6 +220,27 @@ export const Nav = React.memo(function Nav({ view, setView }: NavProps) {
             </button>
           );
         })}
+        {/* External page links */}
+        {LINKS.map(link => (
+          <button
+            key={link.href}
+            onClick={() => router.push(link.href)}
+            style={{
+              position: 'relative',
+              padding: isMobile ? '0 10px' : '0 16px',
+              border: 'none', background: 'transparent',
+              color: 'var(--text3)',
+              fontSize: isMobile ? 12 : 13,
+              fontWeight: 400,
+              cursor: 'pointer', transition: 'color 0.15s',
+              whiteSpace: 'nowrap', flexShrink: 0,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--cyan)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text3)'; }}
+          >
+            {isMobile ? link.short : link.label}
+          </button>
+        ))}
       </div>
 
       <LanguageSelector />

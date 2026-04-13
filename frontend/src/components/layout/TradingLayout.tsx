@@ -14,7 +14,6 @@ import { Portfolio } from '@/components/portfolio/Portfolio';
 import { Leaderboard } from '@/components/leaderboard/Leaderboard';
 import { Analytics } from '@/components/analytics/Analytics';
 import { Marketplace } from '@/components/marketplace/Marketplace';
-import Docs from '@/components/docs/Docs';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { EffectiveWalletProvider } from '@/hooks/useEffectiveWallet';
 
@@ -223,7 +222,6 @@ export default function TradingLayout() {
           {view === 'marketplace'  && <Marketplace />}
           {view === 'leaderboard'  && <Leaderboard />}
           {view === 'analytics'    && <Analytics />}
-          {view === 'docs'         && <Docs />}
         </div>
       </div>
     </OptionBuilderProvider>

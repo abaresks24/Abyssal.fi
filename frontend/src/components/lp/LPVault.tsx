@@ -2,8 +2,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey, Connection } from '@solana/web3.js';
-import { useEffectiveWallet } from '@/hooks/useEffectiveWallet';
 import { getAssociatedTokenAddress } from '@solana/spl-token';
+import { useEffectiveWallet } from '@/hooks/useEffectiveWallet';
 import { useVaultStats } from '@/hooks/useVaultStats';
 import { PacificaOptionsClient, findVaultPDA, findVlpMintPDA } from '@/lib/anchor_client';
 import { VAULT_AUTHORITY, USDC_MINT, SOLANA_RPC, solscanTx, solscanToken } from '@/lib/constants';
@@ -41,7 +41,9 @@ function StatCard({ label, value, sub, accent }: {
 }
 
 export function LPVault() {
-  const { publicKey, wallet } = useEffectiveWallet();
+  const { publicKey } = useEffectiveWallet();
+  // useWallet() for signing transactions — PacificaOptionsClient needs signTransaction
+  const adapterWallet = useWallet();
   const stats  = useVaultStats();
   const { isMobile } = useBreakpoint();
 
@@ -73,16 +75,17 @@ export function LPVault() {
     try {
       const conn      = new Connection(SOLANA_RPC, 'confirmed');
       const authority = new PublicKey(VAULT_AUTHORITY);
-      const client    = new PacificaOptionsClient(wallet);
 
-      // vLP balance — pass publicKey explicitly so it works even when wallet.publicKey is null
+      // vLP balance — read directly without PacificaOptionsClient
       try {
-        setVlpBalance(await client.getVlpBalance(authority, publicKey));
+        const [vault] = findVaultPDA(authority);
+        const [vlpMint] = findVlpMintPDA(vault);
+        const vlpAta = await getAssociatedTokenAddress(vlpMint, publicKey);
+        const bal = await conn.getTokenAccountBalance(vlpAta);
+        setVlpBalance(parseFloat(bal.value.uiAmountString ?? '0'));
       } catch { setVlpBalance(0); }
 
-      // USDP balance — use the Pacifica USDP mint from constants (USDC_MINT).
-      // NOTE: the on-chain vault was initialized with a different mint; the balance
-      // shown here reflects the user's Pacifica USDP tokens available for deposit.
+      // USDP balance
       try {
         const ata = await getAssociatedTokenAddress(USDC_MINT, publicKey);
         const bal = await conn.getTokenAccountBalance(ata);
@@ -91,7 +94,7 @@ export function LPVault() {
     } finally {
       setBalLoading(false);
     }
-  }, [publicKey, wallet]);
+  }, [publicKey]);
 
   useEffect(() => { fetchBalances(); }, [fetchBalances]);
 
@@ -105,7 +108,7 @@ export function LPVault() {
     }
     setLoading(true); setErr(null); setTxSig(null);
     try {
-      const client    = new PacificaOptionsClient(wallet);
+      const client    = new PacificaOptionsClient(adapterWallet);
       const authority = new PublicKey(VAULT_AUTHORITY);
       const sig = tab === 'deposit'
         ? await client.depositVault({ vaultAuthority: authority, usdcAmount: val })
