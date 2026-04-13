@@ -35,27 +35,34 @@ export function CandlestickChart({ candles, currentPrice, selectedStrike, onLoad
   useEffect(() => {
     if (!containerRef.current) return;
 
+    // Read CSS variables for theme-aware chart colors
+    const cs = getComputedStyle(document.documentElement);
+    const bgColor    = cs.getPropertyValue('--bg').trim()    || '#0a121c';
+    const textColor  = cs.getPropertyValue('--text3').trim() || '#526a82';
+    const borderCol  = cs.getPropertyValue('--border').trim() || 'rgba(255,255,255,0.07)';
+    const gridColor  = cs.getPropertyValue('--border').trim() || 'rgba(255,255,255,0.04)';
+
     const chart = createChart(containerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: '#0a121c' },
-        textColor:  '#526a82',
+        background: { type: ColorType.Solid, color: bgColor },
+        textColor,
         fontSize:   11,
       },
       grid: {
-        vertLines: { color: 'rgba(255,255,255,0.04)' },
-        horzLines: { color: 'rgba(255,255,255,0.04)' },
+        vertLines: { color: gridColor + '44' },
+        horzLines: { color: gridColor + '44' },
       },
       crosshair: {
         mode:     CrosshairMode.Normal,
-        vertLine: { color: 'rgba(120,145,170,0.5)', style: LineStyle.Dashed, labelBackgroundColor: '#1e3048' },
-        horzLine: { color: 'rgba(120,145,170,0.5)', style: LineStyle.Dashed, labelBackgroundColor: '#1e3048' },
+        vertLine: { color: 'rgba(120,145,170,0.5)', style: LineStyle.Dashed, labelBackgroundColor: bgColor },
+        horzLine: { color: 'rgba(120,145,170,0.5)', style: LineStyle.Dashed, labelBackgroundColor: bgColor },
       },
       rightPriceScale: {
-        borderColor:  'rgba(255,255,255,0.07)',
+        borderColor:  borderCol,
         scaleMargins: { top: 0.08, bottom: 0.22 },
       },
       timeScale: {
-        borderColor:    'rgba(255,255,255,0.07)',
+        borderColor:    borderCol,
         timeVisible:    true,
         secondsVisible: false,
         lockVisibleTimeRangeOnResize: true,
