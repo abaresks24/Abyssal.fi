@@ -16,6 +16,7 @@ import { Analytics } from '@/components/analytics/Analytics';
 import { Marketplace } from '@/components/marketplace/Marketplace';
 import Docs from '@/components/docs/Docs';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { EffectiveWalletProvider } from '@/hooks/useEffectiveWallet';
 
 // ── Shared panel pieces ───────────────────────────────────────────────────────
 
@@ -189,6 +190,7 @@ export default function TradingLayout() {
   const { isMobile, isTablet } = useBreakpoint();
 
   return (
+    <EffectiveWalletProvider>
     <OptionBuilderProvider>
       <div style={{
         height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
@@ -225,5 +227,6 @@ export default function TradingLayout() {
         </div>
       </div>
     </OptionBuilderProvider>
+    </EffectiveWalletProvider>
   );
 }
