@@ -76,7 +76,10 @@ export function LPVault() {
       const conn      = new Connection(SOLANA_RPC, 'confirmed');
       const authority = new PublicKey(VAULT_AUTHORITY);
 
-      // vLP balance — read directly without PacificaOptionsClient
+      // Read the ACTUAL mint from the vault on-chain (not from env var)
+      const actualMint = await PacificaOptionsClient.getVaultUsdcMint(authority);
+
+      // vLP balance
       try {
         const [vault] = findVaultPDA(authority);
         const [vlpMint] = findVlpMintPDA(vault);
@@ -85,9 +88,9 @@ export function LPVault() {
         setVlpBalance(parseFloat(bal.value.uiAmountString ?? '0'));
       } catch { setVlpBalance(0); }
 
-      // USDP balance
+      // USDP balance — use the mint FROM THE VAULT, not from env var
       try {
-        const ata = await getAssociatedTokenAddress(USDC_MINT, publicKey);
+        const ata = await getAssociatedTokenAddress(actualMint, publicKey);
         const bal = await conn.getTokenAccountBalance(ata);
         setUsdpBalance(parseFloat(bal.value.uiAmountString ?? '0'));
       } catch { setUsdpBalance(0); }
@@ -100,6 +103,11 @@ export function LPVault() {
 
   const handleSubmit = async () => {
     if (!publicKey || !amount) return;
+    // Check adapter wallet is ready for signing
+    if (!adapterWallet.publicKey || !adapterWallet.signTransaction) {
+      setErr('Wallet is syncing — please wait a moment and retry');
+      return;
+    }
     const val = parseFloat(amount);
     if (isNaN(val) || val <= 0) { setErr('Enter a valid amount'); return; }
     if (tab === 'deposit' && usdpBalance !== null && val > usdpBalance) {
