@@ -1,37 +1,46 @@
 'use client';
-import React from 'react';
+import React, { useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import type { Side, Action } from '@/types';
 
 interface Props {
   side:       Side;
   action:     Action;
-  totalCost:  number;   // for buy: premium + fee; for sell: collateral
-  netReceive: number;   // for sell: premium - fee
+  totalCost:  number;
+  netReceive: number;
   disabled:   boolean;
   onBuy:      () => void;
 }
 
 export const BuyButton = React.memo(function BuyButton({ side, action, totalCost, netReceive, disabled, onBuy }: Props) {
   const { publicKey } = useWallet();
+  const [hover, setHover] = useState(false);
 
   const isSell    = action === 'sell';
   const color     = isSell ? 'var(--amber)' : (side === 'call' ? 'var(--green)' : 'var(--red)');
-  const dimColor  = isSell
+  const glowColor = isSell
+    ? 'rgba(236,202,90,0.30)'
+    : (side === 'call' ? 'rgba(2,199,123,0.30)' : 'rgba(235,54,90,0.30)');
+  const bgColor   = isSell
     ? 'rgba(236,202,90,0.14)'
     : (side === 'call' ? 'rgba(2,199,123,0.15)' : 'rgba(235,54,90,0.15)');
+  const bgHover   = isSell
+    ? 'rgba(236,202,90,0.22)'
+    : (side === 'call' ? 'rgba(2,199,123,0.25)' : 'rgba(235,54,90,0.25)');
 
   const sideLabel = side === 'call' ? 'Call' : 'Put';
+  const fmtNum = (v: number) => v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const label = isSell
-    ? `Sell ${sideLabel}${!disabled && netReceive > 0 ? ` · receive $${netReceive.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}`
-    : `Buy ${sideLabel}${!disabled && totalCost > 0 ? ` · $${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}`;
+    ? `Sell ${sideLabel}${!disabled && netReceive > 0 ? ` · receive $${fmtNum(netReceive)}` : ''}`
+    : `Buy ${sideLabel}${!disabled && totalCost > 0 ? ` · $${fmtNum(totalCost)}` : ''}`;
 
   if (!publicKey) {
     return (
       <button disabled style={{
-        width: '100%', padding: '11px 0', borderRadius: 5,
+        width: '100%', padding: '12px 0', borderRadius: 6,
         border: '1px solid var(--border)', background: 'var(--bg2)',
         color: 'var(--text3)', fontSize: 13, fontWeight: 600, cursor: 'not-allowed',
+        letterSpacing: '0.02em',
       }}>
         Connect wallet to trade
       </button>
@@ -42,16 +51,24 @@ export const BuyButton = React.memo(function BuyButton({ side, action, totalCost
     <button
       onClick={onBuy}
       disabled={disabled}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
       style={{
         width: '100%',
-        padding: '11px 0',
-        borderRadius: 5,
-        border: `1px solid ${color}`,
-        background: disabled ? 'var(--bg2)' : dimColor,
+        padding: '12px 0',
+        borderRadius: 6,
+        border: disabled ? '1px solid var(--border)' : `1px solid ${color}`,
+        background: disabled ? 'var(--bg2)' : (hover ? bgHover : bgColor),
         color: disabled ? 'var(--text3)' : color,
         fontSize: 13,
-        fontWeight: 600,
+        fontWeight: 700,
+        letterSpacing: '0.03em',
         cursor: disabled ? 'not-allowed' : 'pointer',
+        boxShadow: (!disabled && hover) ? `0 0 20px ${glowColor}, 0 4px 12px rgba(0,0,0,0.2)` : 'none',
+        transform: (!disabled && hover) ? 'translateY(-1px)' : 'none',
+        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+        position: 'relative',
+        overflow: 'hidden',
       }}
     >
       {label}

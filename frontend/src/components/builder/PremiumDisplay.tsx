@@ -9,7 +9,8 @@ interface Props {
 }
 
 export const PremiumDisplay = React.memo(function PremiumDisplay({ premium, totalPremium, side }: Props) {
-  const color  = side === 'call' ? 'var(--green)' : 'var(--red)';
+  const color     = side === 'call' ? 'var(--green)' : 'var(--red)';
+  const glowColor = side === 'call' ? 'rgba(2,199,123,0.15)' : 'rgba(235,54,90,0.15)';
   const fmtUSD = (v: number) =>
     v < 0.01
       ? v.toFixed(4)
@@ -17,21 +18,34 @@ export const PremiumDisplay = React.memo(function PremiumDisplay({ premium, tota
 
   return (
     <div style={{
-      padding: '10px 0',
-      borderTop: '1px solid var(--border)',
-      borderBottom: '1px solid var(--border)',
+      padding: '14px 12px',
+      margin: '2px 0',
+      background: `linear-gradient(135deg, ${glowColor} 0%, transparent 60%)`,
+      borderRadius: 8,
+      border: '1px solid var(--border)',
       textAlign: 'center',
+      position: 'relative',
+      overflow: 'hidden',
     }}>
-      <div style={{ fontSize: 10, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 4 }}>
+      {/* Subtle top accent line */}
+      <div style={{
+        position: 'absolute', top: 0, left: '20%', right: '20%', height: 1,
+        background: `linear-gradient(90deg, transparent, ${color}, transparent)`,
+        opacity: 0.4,
+      }} />
+
+      <div style={{ fontSize: 9, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>
         Premium
       </div>
-      {/* Big: total cost (size × unit) */}
-      <div className="mono" style={{ fontSize: 22, fontWeight: 500, color }}>
+      <div className="mono" style={{
+        fontSize: 24, fontWeight: 500, color,
+        textShadow: `0 0 20px ${glowColor}`,
+        letterSpacing: '-0.02em',
+      }}>
         ${fmtUSD(totalPremium)}
       </div>
-      {/* Small: per-unit price */}
-      <div className="mono" style={{ fontSize: 11, color: 'var(--text2)', marginTop: 2 }}>
-        ${fmtUSD(premium)} per unit
+      <div className="mono" style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
+        ${fmtUSD(premium)} / unit
       </div>
     </div>
   );

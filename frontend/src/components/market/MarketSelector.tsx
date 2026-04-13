@@ -4,10 +4,10 @@ import { usePacificaWS } from '@/hooks/usePacificaWS';
 import { useOptionBuilder } from '@/hooks/useOptionBuilder';
 import type { Market } from '@/types';
 
-const CATEGORIES: { label: string; markets: Market[] }[] = [
-  { label: 'Crypto',      markets: ['BTC', 'ETH', 'SOL'] },
-  { label: 'Equities',    markets: ['NVDA', 'TSLA', 'PLTR', 'CRCL', 'HOOD', 'SP500'] },
-  { label: 'Commodities', markets: ['XAU', 'XAG', 'PAXG', 'PLATINUM', 'NATGAS', 'COPPER'] },
+const CATEGORIES: { label: string; icon: string; markets: Market[] }[] = [
+  { label: 'Crypto',      icon: '◈', markets: ['BTC', 'ETH', 'SOL'] },
+  { label: 'Equities',    icon: '◉', markets: ['NVDA', 'TSLA', 'PLTR', 'CRCL', 'HOOD', 'SP500'] },
+  { label: 'Commodities', icon: '⬡', markets: ['XAU', 'XAG', 'PAXG', 'PLATINUM', 'NATGAS', 'COPPER'] },
 ];
 
 const DECIMAL_OVERRIDE: Partial<Record<Market, number>> = {
@@ -22,33 +22,56 @@ function fmt(price: number, market: Market): string {
 function MarketRow({ market }: { market: Market }) {
   const { market: selected, setMarket } = useOptionBuilder();
   const { price, change24h } = usePacificaWS(market);
+  const [hover, setHover] = useState(false);
   const isSelected = market === selected;
   const isPos = change24h >= 0;
 
   return (
     <button
       onClick={() => setMarket(market)}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
       style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         width: '100%',
-        padding: '7px 12px',
-        background: isSelected ? 'var(--bg3)' : 'transparent',
+        padding: '8px 12px',
+        background: isSelected
+          ? 'rgba(85,195,233,0.08)'
+          : (hover ? 'rgba(255,255,255,0.02)' : 'transparent'),
         border: 'none',
         borderLeft: `2px solid ${isSelected ? 'var(--cyan)' : 'transparent'}`,
         cursor: 'pointer',
+        transition: 'all 0.15s ease',
       }}
     >
-      <span style={{ fontWeight: 600, fontSize: 12, color: isSelected ? 'var(--cyan)' : 'var(--text)' }}>
-        {market}
-      </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{
+          fontWeight: 700, fontSize: 12,
+          color: isSelected ? 'var(--cyan)' : (hover ? 'var(--text)' : 'var(--text)'),
+          letterSpacing: '0.02em',
+        }}>
+          {market}
+        </span>
+        {isSelected && (
+          <div style={{
+            width: 4, height: 4, borderRadius: '50%',
+            background: 'var(--cyan)',
+            boxShadow: '0 0 6px var(--cyan-glow)',
+          }} />
+        )}
+      </div>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
         <span className="mono" style={{ fontSize: 11, color: 'var(--text)' }}>
           {price > 0 ? `$${fmt(price, market)}` : '—'}
         </span>
         {price > 0 && (
-          <span className="mono" style={{ fontSize: 9, color: isPos ? 'var(--green)' : 'var(--red)' }}>
+          <span className="mono" style={{
+            fontSize: 9,
+            color: isPos ? 'var(--green)' : 'var(--red)',
+            fontWeight: 600,
+          }}>
             {isPos ? '+' : ''}{change24h.toFixed(2)}%
           </span>
         )}
@@ -57,7 +80,7 @@ function MarketRow({ market }: { market: Market }) {
   );
 }
 
-function CategorySection({ label, markets }: { label: string; markets: Market[] }) {
+function CategorySection({ label, icon, markets }: { label: string; icon: string; markets: Market[] }) {
   const [open, setOpen] = useState(true);
 
   return (
@@ -69,18 +92,34 @@ function CategorySection({ label, markets }: { label: string; markets: Market[] 
           alignItems: 'center',
           justifyContent: 'space-between',
           width: '100%',
-          padding: '6px 12px 4px',
+          padding: '8px 12px 5px',
           background: 'transparent',
           border: 'none',
           cursor: 'pointer',
         }}
       >
-        <span style={{ fontSize: 9, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600 }}>
+        <span style={{
+          display: 'flex', alignItems: 'center', gap: 5,
+          fontSize: 9, color: 'var(--text3)', letterSpacing: '0.08em',
+          textTransform: 'uppercase', fontWeight: 600,
+        }}>
+          <span style={{ fontSize: 10, opacity: 0.6 }}>{icon}</span>
           {label}
         </span>
-        <span style={{ fontSize: 9, color: 'var(--text3)' }}>{open ? '▾' : '▸'}</span>
+        <span style={{
+          fontSize: 9, color: 'var(--text3)',
+          transform: open ? 'rotate(0deg)' : 'rotate(-90deg)',
+          transition: 'transform 0.2s ease',
+          display: 'inline-block',
+        }}>▾</span>
       </button>
-      {open && markets.map((m) => <MarketRow key={m} market={m} />)}
+      <div style={{
+        maxHeight: open ? 500 : 0,
+        overflow: 'hidden',
+        transition: 'max-height 0.25s ease',
+      }}>
+        {markets.map((m) => <MarketRow key={m} market={m} />)}
+      </div>
     </div>
   );
 }
@@ -88,11 +127,16 @@ function CategorySection({ label, markets }: { label: string; markets: Market[] 
 export function MarketSelector() {
   return (
     <div>
-      <div style={{ padding: '8px 12px 4px', fontSize: 10, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+      <div style={{
+        padding: '10px 12px 4px',
+        fontSize: 10, color: 'var(--text3)',
+        letterSpacing: '0.1em', textTransform: 'uppercase',
+        fontWeight: 600,
+      }}>
         Markets
       </div>
-      {CATEGORIES.map(({ label, markets }) => (
-        <CategorySection key={label} label={label} markets={markets} />
+      {CATEGORIES.map(({ label, icon, markets }) => (
+        <CategorySection key={label} label={label} icon={icon} markets={markets} />
       ))}
     </div>
   );

@@ -15,15 +15,23 @@ function fmt(n: number, d = 2) {
 function StatCard({ label, value, sub, accent }: {
   label: string; value: string; sub?: string; accent?: string;
 }) {
+  const accentColor = accent ?? 'var(--cyan)';
   return (
     <div style={{
       flex: 1, background: 'var(--bg2)',
-      border: '1px solid var(--border)', borderRadius: 8, padding: '16px 20px',
+      border: '1px solid var(--border)', borderRadius: 10, padding: '16px 20px',
+      position: 'relative', overflow: 'hidden',
     }}>
-      <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+      {/* Top accent line */}
+      <div style={{
+        position: 'absolute', top: 0, left: '15%', right: '15%', height: 1,
+        background: `linear-gradient(90deg, transparent, ${accentColor}, transparent)`,
+        opacity: 0.3,
+      }} />
+      <div style={{ fontSize: 10, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, fontWeight: 500 }}>
         {label}
       </div>
-      <div style={{ fontSize: 22, fontWeight: 700, fontFamily: 'var(--mono)', color: accent ?? 'var(--text)' }}>
+      <div style={{ fontSize: 22, fontWeight: 700, fontFamily: 'var(--mono)', color: accent ?? 'var(--text)', letterSpacing: '-0.02em' }}>
         {value}
       </div>
       {sub && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>{sub}</div>}

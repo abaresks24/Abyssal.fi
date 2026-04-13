@@ -1,23 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useCallback } from 'react';
-import {
-  PublicKey, Connection, Transaction, TransactionInstruction,
-  SystemProgram, ComputeBudgetProgram,
-} from '@solana/web3.js';
-import { getAssociatedTokenAddressSync } from '@solana/spl-token';
-import { SOLANA_RPC, PACIFICA_FAUCET_PROGRAM_ID } from '@/lib/constants';
+import { PublicKey, Connection, Transaction } from '@solana/web3.js';
 
-const PACIFICA_PROGRAM_ID  = new PublicKey(PACIFICA_FAUCET_PROGRAM_ID);
-const USDP_MINT_PK         = new PublicKey('USDPqRbLidFGufty2s3oizmDEKdqx7ePTqzDMbf5ZKM');
-const TOKEN_PROGRAM_ID     = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const ASSOC_TOKEN_PROG_ID  = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
-const MINT_USDC_DISCRIMINATOR = Buffer.from([118, 144, 78, 118, 155, 214, 185, 186]);
-const USDP_CLAIM_AMOUNT    = BigInt(1_000 * 1_000_000); // 1000 USDP (6 decimals)
+/**
+ * v2 faucet key — changing this resets all users so they get fauceted again.
+ * Bump the version number to force a re-faucet for everyone.
+ */
+const FAUCET_DONE_KEY = 'abyssal_faucet_v2';
 
-const FAUCET_DONE_KEY = 'abyssal_faucet_done';
-
-/** Returns true if this wallet has already been fauceted in this browser. */
 function alreadyFauceted(address: string): boolean {
   try {
     const done = JSON.parse(localStorage.getItem(FAUCET_DONE_KEY) ?? '{}');
@@ -33,7 +24,11 @@ function markFauceted(address: string) {
   } catch {}
 }
 
-async function requestSolFaucet(wallet: string): Promise<string> {
+/**
+ * Calls the server-side faucet which sends SOL + 1000 USDP
+ * directly from the filler wallet. No client signing needed.
+ */
+async function requestFaucet(wallet: string): Promise<{ signature: string; solAmount: number; usdpAmount: number }> {
   const res = await fetch('/api/faucet', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -41,93 +36,45 @@ async function requestSolFaucet(wallet: string): Promise<string> {
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? 'Faucet failed');
-  return data.signature as string;
-}
-
-async function claimUSDPFaucet(
-  user: PublicKey,
-  sendTransaction: (tx: Transaction, conn: Connection) => Promise<string>,
-): Promise<string> {
-  const connection = new Connection(SOLANA_RPC, 'confirmed');
-
-  const [centralState] = PublicKey.findProgramAddressSync(
-    [Buffer.from('central_state')],
-    PACIFICA_PROGRAM_ID,
-  );
-  const [userAccount] = PublicKey.findProgramAddressSync(
-    [Buffer.from('user_account'), user.toBuffer()],
-    PACIFICA_PROGRAM_ID,
-  );
-  const userUSDPATA = getAssociatedTokenAddressSync(USDP_MINT_PK, user, false);
-
-  const amountBuf = Buffer.alloc(8);
-  amountBuf.writeBigUInt64LE(USDP_CLAIM_AMOUNT);
-
-  const ix = new TransactionInstruction({
-    programId: PACIFICA_PROGRAM_ID,
-    keys: [
-      { pubkey: user,              isSigner: true,  isWritable: true  },
-      { pubkey: userAccount,       isSigner: false, isWritable: true  },
-      { pubkey: userUSDPATA,       isSigner: false, isWritable: true  },
-      { pubkey: USDP_MINT_PK,      isSigner: false, isWritable: true  },
-      { pubkey: centralState,      isSigner: false, isWritable: false },
-      { pubkey: ASSOC_TOKEN_PROG_ID, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_PROGRAM_ID,  isSigner: false, isWritable: false },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-    ],
-    data: Buffer.concat([MINT_USDC_DISCRIMINATOR, amountBuf]),
-  });
-
-  const tx = new Transaction()
-    .add(ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }))
-    .add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1000 }))
-    .add(ix);
-
-  return sendTransaction(tx, connection);
+  return data;
 }
 
 /**
- * Auto-faucet hook: on first wallet connection, sends SOL + 1000 USDP.
+ * Auto-faucet hook: on first wallet connection, the server sends
+ * 0.05 SOL + 1000 USDP from the filler wallet.
  * Uses localStorage to avoid re-fauceting the same wallet.
+ *
+ * The sendTransaction param is kept for API compatibility but is no longer
+ * used — all transfers happen server-side via the filler keypair.
  */
 export function useAutoFaucet(
   address: string | null,
   publicKey: PublicKey | null,
-  sendTransaction: ((tx: Transaction, conn: Connection) => Promise<string>) | null,
+  _sendTransaction: ((tx: Transaction, conn: Connection) => Promise<string>) | null,
 ) {
   const runningRef = useRef(false);
 
   const doFaucet = useCallback(async () => {
-    if (!address || !publicKey || !sendTransaction) return;
+    if (!address) return;
     if (alreadyFauceted(address)) return;
     if (runningRef.current) return;
     runningRef.current = true;
 
     try {
-      // 1. Send SOL for fees
-      await requestSolFaucet(address);
-
-      // 2. Wait a bit for SOL to land
-      await new Promise(r => setTimeout(r, 2000));
-
-      // 3. Claim 1000 USDP
-      await claimUSDPFaucet(publicKey, sendTransaction);
-
-      // Mark as done
+      const result = await requestFaucet(address);
       markFauceted(address);
-      console.log('[AutoFaucet] Success: 0.05 SOL + 1000 USDP sent to', address);
+      console.log(`[AutoFaucet] Success: ${result.solAmount} SOL + ${result.usdpAmount} USDP sent to`, address);
     } catch (e) {
-      console.warn('[AutoFaucet] Failed (user may need to claim manually):', e);
-      // Still mark as attempted to avoid infinite retry loops
-      markFauceted(address);
+      console.warn('[AutoFaucet] Failed:', e);
+      // Don't mark as fauceted on failure — retry on next connection
     } finally {
       runningRef.current = false;
     }
-  }, [address, publicKey, sendTransaction]);
+  }, [address]);
 
   useEffect(() => {
-    if (address && publicKey && sendTransaction) {
+    if (address) {
       doFaucet();
     }
-  }, [address, publicKey, sendTransaction, doFaucet]);
+  }, [address, doFaucet]);
 }

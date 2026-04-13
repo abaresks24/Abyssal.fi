@@ -84,7 +84,7 @@ function PrivyConnectButton() {
   return (
     <div ref={menuRef} style={{ position: 'relative' }}>
       <button onClick={() => setMenuOpen(v => !v)} style={btnStyle({})}>
-        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--green)', display: 'inline-block', flexShrink: 0 }} />
+        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--green)', display: 'inline-block', flexShrink: 0, boxShadow: '0 0 6px var(--green-glow)' }} />
         <span style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{short}</span>
         <svg width="8" height="5" viewBox="0 0 8 5" fill="none" style={{ opacity: 0.5 }}>
           <path d="M1 1l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
@@ -195,9 +195,10 @@ export function ConnectButton() {
 function DropdownMenu({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
-      position: 'absolute', top: 'calc(100% + 4px)', right: 0, minWidth: 200,
-      background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 6,
+      position: 'absolute', top: 'calc(100% + 6px)', right: 0, minWidth: 210,
+      background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 8,
       overflow: 'hidden', zIndex: 1000,
+      boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
     }}>
       {children}
     </div>
@@ -206,13 +207,19 @@ function DropdownMenu({ children }: { children: React.ReactNode }) {
 
 function btnStyle({ primary, muted }: { primary?: boolean; muted?: boolean } = {}) {
   return {
-    height: 28, padding: '0 12px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6,
-    background: primary ? 'var(--cyan)' : 'var(--bg3)',
+    height: 30, padding: '0 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6,
+    background: primary
+      ? 'linear-gradient(135deg, var(--cyan), #3aadd4)'
+      : 'var(--bg3)',
     border: primary ? 'none' : '1px solid var(--border2)',
-    borderRadius: 4, color: primary ? '#0a121c' : 'var(--text)',
-    fontFamily: 'var(--font)', fontWeight: primary ? 600 : 400,
+    borderRadius: 6,
+    color: primary ? '#0a121c' : 'var(--text)',
+    fontFamily: 'var(--font)', fontWeight: primary ? 700 : 400,
     cursor: muted ? 'default' : 'pointer', opacity: muted ? 0.5 : 1,
     whiteSpace: 'nowrap' as const,
+    letterSpacing: primary ? '0.03em' : '0',
+    boxShadow: primary ? '0 0 12px rgba(85,195,233,0.2)' : 'none',
+    transition: 'all 0.18s ease',
   };
 }
 

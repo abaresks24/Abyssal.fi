@@ -1,14 +1,15 @@
 /**
- * Devnet faucet — sends SOL for transaction fees.
+ * Devnet faucet — sends SOL (for fees) + USDP (for trading) to new users.
  *
- * USDP (Pacifica's stablecoin) is distributed by Pacifica's own faucet:
- *   https://app.pacifica.fi/faucet
+ * The filler wallet must hold:
+ *   - Enough SOL to cover transfers + rent
+ *   - Enough USDP in its ATA to distribute
  *
  * POST /api/faucet
  * Body: { wallet: string }
  *
  * Requires env vars:
- *   FILLER_KEYPAIR  — JSON array (64 bytes) — wallet that sends SOL_FILL lamports
+ *   FILLER_KEYPAIR  — JSON array (64 bytes) of the filler wallet secret key
  */
 import { NextRequest, NextResponse } from 'next/server';
 import {
@@ -20,28 +21,28 @@ import {
   Transaction,
   sendAndConfirmTransaction,
 } from '@solana/web3.js';
+import {
+  getAssociatedTokenAddress,
+  createAssociatedTokenAccountInstruction,
+  createTransferInstruction,
+  TOKEN_PROGRAM_ID,
+} from '@solana/spl-token';
 
 const SOLANA_RPC = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
 
+// Pacifica USDP mint on devnet
+const USDP_MINT = new PublicKey('USDPqRbLidFGufty2s3oizmDEKdqx7ePTqzDMbf5ZKM');
+
 // SOL sent to each claimant — enough for ~20 transactions
 const SOL_FILL = Math.round(0.05 * LAMPORTS_PER_SOL);
+
+// USDP sent to each claimant — 1000 USDP (6 decimals)
+const USDP_FILL = 1_000 * 1_000_000;
 
 function loadKeypair(envVar: string): Keypair {
   const raw = process.env[envVar];
   if (!raw) throw new Error(`${envVar} env var not set`);
   return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(raw)));
-}
-
-async function solTransfer(
-  connection: Connection,
-  from: Keypair,
-  to: PublicKey,
-  lamports: number,
-): Promise<string> {
-  const tx = new Transaction().add(
-    SystemProgram.transfer({ fromPubkey: from.publicKey, toPubkey: to, lamports }),
-  );
-  return sendAndConfirmTransaction(connection, tx, [from], { commitment: 'confirmed' });
 }
 
 export async function POST(req: NextRequest) {
@@ -62,18 +63,65 @@ export async function POST(req: NextRequest) {
     const connection = new Connection(SOLANA_RPC, 'confirmed');
     const filler = loadKeypair('FILLER_KEYPAIR');
 
+    // Check filler has enough SOL
     const fillerBalance = await connection.getBalance(filler.publicKey);
-    if (fillerBalance < SOL_FILL + 5_000) {
-      throw new Error('Filler balance too low — contact admin');
+    if (fillerBalance < SOL_FILL + 20_000) {
+      throw new Error('Filler SOL balance too low — contact admin');
     }
 
-    const solSig = await solTransfer(connection, filler, recipient, SOL_FILL);
+    // ── Build transaction: SOL transfer + USDP transfer ──────────────────────
+
+    const tx = new Transaction();
+
+    // 1. SOL transfer
+    tx.add(
+      SystemProgram.transfer({
+        fromPubkey: filler.publicKey,
+        toPubkey: recipient,
+        lamports: SOL_FILL,
+      }),
+    );
+
+    // 2. USDP transfer — create recipient ATA if needed, then transfer
+    const fillerUsdpAta = await getAssociatedTokenAddress(USDP_MINT, filler.publicKey);
+    const recipientUsdpAta = await getAssociatedTokenAddress(USDP_MINT, recipient);
+
+    // Check if recipient already has an ATA
+    const recipientAtaInfo = await connection.getAccountInfo(recipientUsdpAta);
+    if (!recipientAtaInfo) {
+      // Create ATA for recipient (filler pays rent)
+      tx.add(
+        createAssociatedTokenAccountInstruction(
+          filler.publicKey,  // payer
+          recipientUsdpAta,  // ATA address
+          recipient,         // owner
+          USDP_MINT,         // mint
+        ),
+      );
+    }
+
+    // Transfer USDP from filler to recipient
+    tx.add(
+      createTransferInstruction(
+        fillerUsdpAta,      // source
+        recipientUsdpAta,   // destination
+        filler.publicKey,   // authority
+        USDP_FILL,          // amount (raw, 6 decimals)
+        [],                 // multiSigners
+        TOKEN_PROGRAM_ID,
+      ),
+    );
+
+    const sig = await sendAndConfirmTransaction(connection, tx, [filler], {
+      commitment: 'confirmed',
+    });
 
     return NextResponse.json({
-      success:     true,
-      signature:   solSig,
-      recipient:   recipient.toBase58(),
-      solAmount:   SOL_FILL / LAMPORTS_PER_SOL,
+      success:    true,
+      signature:  sig,
+      recipient:  recipient.toBase58(),
+      solAmount:  SOL_FILL / LAMPORTS_PER_SOL,
+      usdpAmount: USDP_FILL / 1_000_000,
     });
   } catch (e: any) {
     console.error('[faucet]', e);

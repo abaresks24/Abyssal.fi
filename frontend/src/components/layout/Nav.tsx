@@ -38,11 +38,12 @@ function ThemeToggle() {
       onClick={toggle}
       title={dark ? t.theme.toLight : t.theme.toDark}
       style={{
-        width: 28, height: 28,
+        width: 30, height: 30,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: 'var(--bg3)', border: '1px solid var(--border2)',
-        borderRadius: 4, cursor: 'pointer', color: 'var(--text2)',
+        borderRadius: 6, cursor: 'pointer', color: 'var(--text2)',
         flexShrink: 0, marginRight: 4, fontSize: 14, lineHeight: 1,
+        transition: 'all 0.18s ease',
       }}
     >
       {dark ? '☀' : '☾'}
@@ -74,17 +75,13 @@ function LanguageSelector() {
         onClick={() => setOpen(v => !v)}
         title="Language / Langue"
         style={{
-          width: 28, height: 28,
+          width: 30, height: 30,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: open ? 'var(--bg3)' : 'var(--bg3)',
           border: `1px solid ${open ? 'var(--cyan)' : 'var(--border2)'}`,
-          borderRadius: 4, cursor: 'pointer', color: 'var(--text2)',
+          borderRadius: 6, cursor: 'pointer', color: 'var(--text2)',
           flexShrink: 0, fontSize: 15, lineHeight: 1,
-          transition: 'border-color 0.15s',
-        }}
-        onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--cyan)')}
-        onMouseLeave={e => {
-          if (!open) e.currentTarget.style.borderColor = 'var(--border2)';
+          transition: 'all 0.18s ease',
         }}
       >
         🌐
@@ -92,9 +89,10 @@ function LanguageSelector() {
 
       {open && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 4px)', right: 0,
+          position: 'absolute', top: 'calc(100% + 6px)', right: 0,
           background: 'var(--bg2)', border: '1px solid var(--border2)',
-          borderRadius: 6, overflow: 'hidden', zIndex: 1000, minWidth: 130,
+          borderRadius: 8, overflow: 'hidden', zIndex: 1000, minWidth: 140,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
         }}>
           {LOCALES.map(l => (
             <button
@@ -102,21 +100,16 @@ function LanguageSelector() {
               onClick={() => { setLocale(l); setOpen(false); }}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                width: '100%', padding: '8px 12px',
+                width: '100%', padding: '9px 14px',
                 background: locale === l ? 'rgba(85,195,233,0.1)' : 'transparent',
                 border: 'none', textAlign: 'left', cursor: 'pointer',
                 fontSize: 12, color: locale === l ? 'var(--cyan)' : 'var(--text)',
                 fontWeight: locale === l ? 600 : 400,
-              }}
-              onMouseEnter={e => {
-                if (locale !== l) e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
-              }}
-              onMouseLeave={e => {
-                if (locale !== l) e.currentTarget.style.background = 'transparent';
+                transition: 'background 0.12s',
               }}
             >
               <span>{LOCALE_LABELS[l]}</span>
-              {locale === l && <span style={{ fontSize: 10 }}>✓</span>}
+              {locale === l && <span style={{ fontSize: 10, color: 'var(--cyan)' }}>✓</span>}
             </button>
           ))}
         </div>
@@ -157,11 +150,24 @@ export const Nav = React.memo(function Nav({ view, setView }: NavProps) {
           cursor: 'pointer', marginRight: isMobile ? 8 : 28, flexShrink: 0,
         }}
       >
-        <Image
-          src="/logo.svg" alt="Abyssal"
-          width={isMobile ? 26 : 32} height={isMobile ? 26 : 32}
-          style={{ borderRadius: '50%' }}
-        />
+        <div style={{
+          position: 'relative',
+          width: isMobile ? 26 : 32, height: isMobile ? 26 : 32,
+        }}>
+          <Image
+            src="/logo.svg" alt="Abyssal"
+            width={isMobile ? 26 : 32} height={isMobile ? 26 : 32}
+            style={{ borderRadius: '50%' }}
+          />
+          {/* Subtle glow ring */}
+          <div style={{
+            position: 'absolute', inset: -2,
+            borderRadius: '50%',
+            border: '1px solid rgba(85,195,233,0.15)',
+            animation: 'pulse-glow 3s ease-in-out infinite',
+            pointerEvents: 'none',
+          }} />
+        </div>
         {!isMobile && (
           <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: '-0.02em', color: 'var(--text)' }}>
             Abyssal<span style={{ color: 'var(--cyan)' }}>.fi</span>
@@ -188,7 +194,7 @@ export const Nav = React.memo(function Nav({ view, setView }: NavProps) {
                 fontSize: isMobile ? 12 : 13,
                 fontWeight: active ? 600 : 400,
                 cursor: 'pointer', letterSpacing: active ? '-0.01em' : '0',
-                transition: 'color 0.12s', whiteSpace: 'nowrap', flexShrink: 0,
+                transition: 'color 0.15s', whiteSpace: 'nowrap', flexShrink: 0,
               }}
               onMouseEnter={e => { if (!active) e.currentTarget.style.color = 'var(--text2)'; }}
               onMouseLeave={e => { if (!active) e.currentTarget.style.color = 'var(--text3)'; }}
@@ -198,7 +204,9 @@ export const Nav = React.memo(function Nav({ view, setView }: NavProps) {
                 <span style={{
                   position: 'absolute', bottom: 0,
                   left: isMobile ? 4 : 8, right: isMobile ? 4 : 8,
-                  height: 2, background: 'var(--cyan)', borderRadius: '2px 2px 0 0',
+                  height: 2,
+                  background: 'linear-gradient(90deg, transparent, var(--cyan), transparent)',
+                  borderRadius: '2px 2px 0 0',
                 }} />
               )}
             </button>

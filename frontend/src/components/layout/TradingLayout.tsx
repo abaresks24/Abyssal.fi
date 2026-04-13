@@ -190,10 +190,27 @@ export default function TradingLayout() {
 
   return (
     <OptionBuilderProvider>
-      <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{
+        height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        position: 'relative',
+      }}>
+        {/* Ambient gradient orb — subtle depth cue */}
+        <div style={{
+          position: 'absolute', top: -200, right: -200,
+          width: 600, height: 600,
+          background: 'radial-gradient(circle, rgba(85,195,233,0.03) 0%, transparent 70%)',
+          pointerEvents: 'none', zIndex: 0,
+        }} />
+        <div style={{
+          position: 'absolute', bottom: -300, left: -200,
+          width: 700, height: 700,
+          background: 'radial-gradient(circle, rgba(2,199,123,0.02) 0%, transparent 70%)',
+          pointerEvents: 'none', zIndex: 0,
+        }} />
+
         <Nav view={view} setView={setView} />
 
-        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative', zIndex: 1 }}>
           {view === 'trade' && (
             isMobile  ? <MobileTradeView />  :
             isTablet  ? <TabletTradeView />  :

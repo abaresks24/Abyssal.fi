@@ -15,13 +15,22 @@ function fmtExpiry(d: Date) {
 }
 
 function SummaryCard({ label, value, color }: { label: string; value: string; color?: string }) {
+  const accentColor = color ?? 'var(--cyan)';
   return (
     <div style={{
       flex: 1, background: 'var(--bg2)', border: '1px solid var(--border)',
-      borderRadius: 8, padding: '14px 18px',
+      borderRadius: 10, padding: '16px 20px',
+      position: 'relative', overflow: 'hidden',
+      transition: 'border-color 0.2s',
     }}>
-      <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 20, fontFamily: 'var(--mono)', color: color ?? 'var(--text)' }}>{value}</div>
+      {/* Top accent line */}
+      <div style={{
+        position: 'absolute', top: 0, left: '15%', right: '15%', height: 1,
+        background: `linear-gradient(90deg, transparent, ${accentColor}, transparent)`,
+        opacity: 0.3,
+      }} />
+      <div style={{ fontSize: 10, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, fontWeight: 500 }}>{label}</div>
+      <div style={{ fontSize: 22, fontFamily: 'var(--mono)', color: color ?? 'var(--text)', fontWeight: 500, letterSpacing: '-0.02em' }}>{value}</div>
     </div>
   );
 }
