@@ -51,11 +51,16 @@ export function OptionBuilder() {
     try {
       // Refresh oracle price before trade (must be < 60s old)
       setErr('Refreshing price feed…');
-      await fetch('/api/keeper', {
+      const keeperRes = await fetch('/api/keeper', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ market }),
       });
+      const keeperData = await keeperRes.json();
+      if (!keeperRes.ok) {
+        throw new Error(`Price feed update failed: ${keeperData.error ?? 'unknown'}`);
+      }
+      console.log('[Keeper] Price updated:', keeperData.market, '$' + keeperData.price);
       setErr(null);
 
       const client    = new PacificaOptionsClient(walletForClient as any);

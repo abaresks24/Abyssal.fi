@@ -13,6 +13,7 @@ import {
 } from '@solana/web3.js';
 import { Program, AnchorProvider, BN } from '@coral-xyz/anchor';
 import https from 'https';
+import IDL from '@/lib/pacifica_options_idl.json';
 
 const SOLANA_RPC  = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
 const PROGRAM_ID  = new PublicKey('CBkvR8SeN6j8RQKB7dSxG3dza2v71XHmWEe8LgfMW1hG');
@@ -92,8 +93,6 @@ export async function POST(req: NextRequest) {
 
     const iv = DEFAULT_IV[market] ?? 0.50;
 
-    // Load IDL dynamically
-    const IDL = require('@/lib/pacifica_options_idl.json');
     const wallet = {
       publicKey: keeper.publicKey,
       signTransaction: async (tx: any) => { tx.sign(keeper); return tx; },
