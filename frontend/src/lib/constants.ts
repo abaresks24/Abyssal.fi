@@ -2,13 +2,20 @@ import { PublicKey } from '@solana/web3.js';
 import type { Market, Expiry } from '@/types';
 
 // ── Program / network ─────────────────────────────────────────────────────────
+// Use || (not ??) so empty strings from Vercel env vars fall through to defaults.
 
-export const PROGRAM_ID       = new PublicKey(process.env.NEXT_PUBLIC_PROGRAM_ID ?? 'CBkvR8SeN6j8RQKB7dSxG3dza2v71XHmWEe8LgfMW1hG');
-export const USDC_MINT        = new PublicKey(process.env.NEXT_PUBLIC_USDC_MINT ?? 'USDPqRbLidFGufty2s3oizmDEKdqx7ePTqzDMbf5ZKM');
-export const SOLANA_RPC       = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
-export const VAULT_AUTHORITY  = process.env.NEXT_PUBLIC_VAULT_AUTHORITY ?? 'AHWUeGsXbx9gd46SBS5SQK4rfQ8rGb1wWAzvZtJ6zdRg';
-/** Pacifica faucet program — used by the devnet token faucet in ConnectButton */
-export const PACIFICA_FAUCET_PROGRAM_ID = process.env.NEXT_PUBLIC_PACIFICA_FAUCET_PROGRAM_ID ?? 'peRPsYCcB1J9jvrs29jiGdjkytxs8uHLmSPLKKP9ptm';
+export const PROGRAM_ID       = new PublicKey(process.env.NEXT_PUBLIC_PROGRAM_ID || 'CBkvR8SeN6j8RQKB7dSxG3dza2v71XHmWEe8LgfMW1hG');
+export const USDC_MINT        = new PublicKey(process.env.NEXT_PUBLIC_USDC_MINT || 'USDPqRbLidFGufty2s3oizmDEKdqx7ePTqzDMbf5ZKM');
+export const SOLANA_RPC       = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+export const VAULT_AUTHORITY  = process.env.NEXT_PUBLIC_VAULT_AUTHORITY || 'AHWUeGsXbx9gd46SBS5SQK4rfQ8rGb1wWAzvZtJ6zdRg';
+export const PACIFICA_FAUCET_PROGRAM_ID = process.env.NEXT_PUBLIC_PACIFICA_FAUCET_PROGRAM_ID || 'peRPsYCcB1J9jvrs29jiGdjkytxs8uHLmSPLKKP9ptm';
+
+// Debug: log resolved values at startup (visible in browser console)
+if (typeof window !== 'undefined') {
+  console.log('[Abyssal] PROGRAM_ID:', PROGRAM_ID.toBase58());
+  console.log('[Abyssal] VAULT_AUTHORITY:', VAULT_AUTHORITY);
+  console.log('[Abyssal] SOLANA_RPC:', SOLANA_RPC);
+}
 
 // ── Solscan helpers (cluster-aware) ───────────────────────────────────────────
 

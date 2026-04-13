@@ -178,6 +178,7 @@ export class PacificaOptionsClient {
   private get program(): Program<PacificaOptions> {
     if (!this._program) {
       this._program = new Program<PacificaOptions>(IDL as any, this.provider);
+      console.log('[Anchor] Program ID:', this._program.programId.toBase58());
     }
     return this._program;
   }
@@ -262,6 +263,11 @@ export class PacificaOptionsClient {
     const [vault]    = findVaultPDA(params.vaultAuthority);
     const [ammPool]  = findAmmPoolPDA(vault, marketDisc, optTypeDisc, strike, expiry);
     const [position] = findPositionPDA(payer, vault, marketDisc, optTypeDisc, strike, expiry);
+
+    console.log('[ensureSeries] vaultAuthority:', params.vaultAuthority.toBase58());
+    console.log('[ensureSeries] vault PDA:', vault.toBase58());
+    console.log('[ensureSeries] ammPool PDA:', ammPool.toBase58());
+    console.log('[ensureSeries] payer:', payer.toBase58());
 
     return await this.program.methods
       .ensureSeries({
@@ -803,8 +809,11 @@ export class PacificaOptionsClient {
     const depositorUsdc = await getAssociatedTokenAddress(usdcMint, depositor);
     const depositorVlp  = await getAssociatedTokenAddress(vlpMint, depositor);
 
-    // The on-chain program handles ATA creation via init_if_needed
-    // (passing associatedTokenProgram + systemProgram + rent)
+    console.log('[depositVault] vault:', vault.toBase58());
+    console.log('[depositVault] vlpMint:', vlpMint.toBase58());
+    console.log('[depositVault] depositorUsdc:', depositorUsdc.toBase58());
+    console.log('[depositVault] depositorVlp:', depositorVlp.toBase58());
+
     return await this.program.methods
       .depositVault({
         usdcAmount:   new BN(Math.round(params.usdcAmount * SCALE)),
