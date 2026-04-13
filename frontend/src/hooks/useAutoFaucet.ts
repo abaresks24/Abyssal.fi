@@ -9,6 +9,9 @@ import { PublicKey, Connection, Transaction } from '@solana/web3.js';
  */
 const FAUCET_DONE_KEY = 'abyssal_faucet_v2';
 
+/** Filler wallet — skip auto-faucet (would send tokens to itself). */
+const FILLER_ADDRESS = '58ZYLbE63N79tBrfSEUAyWY28muzAnV7MDjKt754tm4t';
+
 function alreadyFauceted(address: string): boolean {
   try {
     const done = JSON.parse(localStorage.getItem(FAUCET_DONE_KEY) ?? '{}');
@@ -56,6 +59,7 @@ export function useAutoFaucet(
 
   const doFaucet = useCallback(async () => {
     if (!address) return;
+    if (address === FILLER_ADDRESS) return;
     if (alreadyFauceted(address)) return;
     if (runningRef.current) return;
     runningRef.current = true;
