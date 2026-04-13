@@ -803,24 +803,8 @@ export class PacificaOptionsClient {
     const depositorUsdc = await getAssociatedTokenAddress(usdcMint, depositor);
     const depositorVlp  = await getAssociatedTokenAddress(vlpMint, depositor);
 
-    // Create vLP ATA if it doesn't exist yet (first deposit)
-    const vlpAtaInfo = await this.connection.getAccountInfo(depositorVlp);
-    if (!vlpAtaInfo) {
-      const { createAssociatedTokenAccountInstruction } = await import('@solana/spl-token');
-      const createAtaIx = createAssociatedTokenAccountInstruction(
-        depositor,     // payer
-        depositorVlp,  // ATA address
-        depositor,     // owner
-        vlpMint,       // mint
-      );
-      const { blockhash, lastValidBlockHeight } =
-        await this.connection.getLatestBlockhash();
-      const ataTx = new Transaction({ feePayer: depositor, blockhash, lastValidBlockHeight })
-        .add(createAtaIx);
-      const ataSig = await this.wallet.sendTransaction!(ataTx, this.connection);
-      await this.connection.confirmTransaction({ signature: ataSig, blockhash, lastValidBlockHeight });
-    }
-
+    // The on-chain program handles ATA creation via init_if_needed
+    // (passing associatedTokenProgram + systemProgram + rent)
     return await this.program.methods
       .depositVault({
         usdcAmount:   new BN(Math.round(params.usdcAmount * SCALE)),
