@@ -35,49 +35,49 @@ export function CandlestickChart({ candles, currentPrice, selectedStrike, onLoad
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // Read CSS variables for theme-aware chart colors
+    // Read CSS variables for theme-aware colors
     const cs = getComputedStyle(document.documentElement);
-    const bgColor    = cs.getPropertyValue('--bg').trim()    || '#0a121c';
-    const textColor  = cs.getPropertyValue('--text3').trim() || '#526a82';
-    const borderCol  = cs.getPropertyValue('--border').trim() || 'rgba(255,255,255,0.07)';
-    const gridColor  = cs.getPropertyValue('--border').trim() || 'rgba(255,255,255,0.04)';
+    const bgColor   = cs.getPropertyValue('--bg').trim()    || '#0a121c';
+    const textColor = cs.getPropertyValue('--text3').trim() || '#526a82';
+    const borderCol = cs.getPropertyValue('--border').trim() || 'rgba(255,255,255,0.07)';
+    const bg2Color  = cs.getPropertyValue('--bg2').trim()   || '#111e2c';
 
     const chart = createChart(containerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: bgColor },
         textColor,
-        fontSize:   11,
+        fontSize: 11,
       },
       grid: {
-        vertLines: { color: gridColor + '44' },
-        horzLines: { color: gridColor + '44' },
+        vertLines: { color: borderCol + '30' },
+        horzLines: { color: borderCol + '30' },
       },
       crosshair: {
-        mode:     CrosshairMode.Normal,
-        vertLine: { color: 'rgba(120,145,170,0.5)', style: LineStyle.Dashed, labelBackgroundColor: bgColor },
-        horzLine: { color: 'rgba(120,145,170,0.5)', style: LineStyle.Dashed, labelBackgroundColor: bgColor },
+        mode: CrosshairMode.Normal,
+        vertLine: { color: 'rgba(120,145,170,0.5)', style: LineStyle.Dashed, labelBackgroundColor: bg2Color },
+        horzLine: { color: 'rgba(120,145,170,0.5)', style: LineStyle.Dashed, labelBackgroundColor: bg2Color },
       },
       rightPriceScale: {
-        borderColor:  borderCol,
-        scaleMargins: { top: 0.08, bottom: 0.22 },
+        borderColor: borderCol,
+        scaleMargins: { top: 0.05, bottom: 0.28 },
       },
       timeScale: {
-        borderColor:    borderCol,
-        timeVisible:    true,
+        borderColor: borderCol,
+        timeVisible: true,
         secondsVisible: false,
         lockVisibleTimeRangeOnResize: true,
       },
       autoSize: true,
       handleScroll: {
-        mouseWheel:       true,
+        mouseWheel: true,
         pressedMouseMove: true,
-        horzTouchDrag:    true,
-        vertTouchDrag:    false,
+        horzTouchDrag: true,
+        vertTouchDrag: false,
       },
       handleScale: {
         axisPressedMouseMove: { time: true, price: true },
-        mouseWheel:           true,
-        pinch:                true,
+        mouseWheel: true,
+        pinch: true,
         axisDoubleClickReset: { time: true, price: true },
       },
     });
@@ -91,12 +91,13 @@ export function CandlestickChart({ candles, currentPrice, selectedStrike, onLoad
       wickDownColor:   '#eb365a',
     } as CandlestickSeriesPartialOptions);
 
+    // Volume in the lower portion of the same chart — synchronized by default
     const volumeSeries = chart.addSeries(HistogramSeries, {
       priceFormat:  { type: 'volume' },
       priceScaleId: 'vol',
     } as HistogramSeriesPartialOptions);
     volumeSeries.priceScale().applyOptions({
-      scaleMargins: { top: 0.82, bottom: 0 },
+      scaleMargins: { top: 0.78, bottom: 0 },
     });
 
     chartRef.current  = chart;
@@ -130,11 +131,9 @@ export function CandlestickChart({ candles, currentPrice, selectedStrike, onLoad
       volumeRef.current.setData(candles.map(c => ({
         time:  t(c),
         value: c.volume,
-        color: c.close >= c.open ? 'rgba(2,199,123,0.35)' : 'rgba(235,54,90,0.35)',
+        color: c.close >= c.open ? 'rgba(2,199,123,0.45)' : 'rgba(235,54,90,0.45)',
       })));
     }
-    // Only scroll to real time on the very first data load — after that the
-    // user is free to navigate wherever they want without being snapped back.
     if (!initialScrollRef.current) {
       chartRef.current?.timeScale().scrollToRealTime();
       initialScrollRef.current = true;
