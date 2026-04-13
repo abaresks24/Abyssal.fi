@@ -1,12 +1,12 @@
 'use client';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey, Connection } from '@solana/web3.js';
 import { getAssociatedTokenAddress } from '@solana/spl-token';
 import { useEffectiveWallet } from '@/hooks/useEffectiveWallet';
 import { useVaultStats } from '@/hooks/useVaultStats';
 import { PacificaOptionsClient, findVaultPDA, findVlpMintPDA } from '@/lib/anchor_client';
-import { VAULT_AUTHORITY, USDC_MINT, SOLANA_RPC, solscanTx, solscanToken } from '@/lib/constants';
+import { VAULT_AUTHORITY, SOLANA_RPC, solscanTx, solscanToken } from '@/lib/constants';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 
 function fmt(n: number, d = 2) {
@@ -69,35 +69,36 @@ export function LPVault() {
     } catch { return null; }
   })();
 
+  // Hardcoded USDP mint — same as faucet, same as vault. No env var dependency.
+  const USDP_MINT = useMemo(() => new PublicKey('USDPqRbLidFGufty2s3oizmDEKdqx7ePTqzDMbf5ZKM'), []);
+
   const fetchBalances = useCallback(async () => {
     if (!publicKey) { setVlpBalance(0); setUsdpBalance(null); return; }
     setBalLoading(true);
+    const conn = new Connection(SOLANA_RPC, 'confirmed');
+
+    // vLP balance
     try {
-      const conn      = new Connection(SOLANA_RPC, 'confirmed');
       const authority = new PublicKey(VAULT_AUTHORITY);
+      const [vault] = findVaultPDA(authority);
+      const [vlpMint] = findVlpMintPDA(vault);
+      const vlpAta = await getAssociatedTokenAddress(vlpMint, publicKey);
+      const bal = await conn.getTokenAccountBalance(vlpAta);
+      setVlpBalance(parseFloat(bal.value.uiAmountString ?? '0'));
+    } catch { setVlpBalance(0); }
 
-      // Read the ACTUAL mint from the vault on-chain (not from env var)
-      const actualMint = await PacificaOptionsClient.getVaultUsdcMint(authority);
-
-      // vLP balance
-      try {
-        const [vault] = findVaultPDA(authority);
-        const [vlpMint] = findVlpMintPDA(vault);
-        const vlpAta = await getAssociatedTokenAddress(vlpMint, publicKey);
-        const bal = await conn.getTokenAccountBalance(vlpAta);
-        setVlpBalance(parseFloat(bal.value.uiAmountString ?? '0'));
-      } catch { setVlpBalance(0); }
-
-      // USDP balance — use the mint FROM THE VAULT, not from env var
-      try {
-        const ata = await getAssociatedTokenAddress(actualMint, publicKey);
-        const bal = await conn.getTokenAccountBalance(ata);
-        setUsdpBalance(parseFloat(bal.value.uiAmountString ?? '0'));
-      } catch { setUsdpBalance(0); }
-    } finally {
-      setBalLoading(false);
+    // USDP balance — direct hardcoded mint, no env var, no on-chain read
+    try {
+      const ata = await getAssociatedTokenAddress(USDP_MINT, publicKey);
+      const bal = await conn.getTokenAccountBalance(ata);
+      const amount = parseFloat(bal.value.uiAmountString ?? '0');
+      setUsdpBalance(amount);
+    } catch {
+      setUsdpBalance(0);
     }
-  }, [publicKey]);
+
+    setBalLoading(false);
+  }, [publicKey, USDP_MINT]);
 
   useEffect(() => { fetchBalances(); }, [fetchBalances]);
 
