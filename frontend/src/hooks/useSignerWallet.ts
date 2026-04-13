@@ -5,35 +5,37 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey, Connection, Transaction } from '@solana/web3.js';
 import { PRIVY_ENABLED } from '@/components/WalletProvider';
 import { useEffectiveWallet } from './useEffectiveWallet';
+import { useWallets, useSignTransaction } from '@privy-io/react-auth/solana';
 
-let usePrivyHooks: { useWallets: any; useSignTransaction: any } | null = null;
-if (PRIVY_ENABLED) {
-  try {
-    const privySolana = require('@privy-io/react-auth/solana');
-    usePrivyHooks = {
-      useWallets: privySolana.useWallets,
-      useSignTransaction: privySolana.useSignTransaction,
-    };
-  } catch {}
+/**
+ * Internal: Privy-backed signer (only rendered when PRIVY_ENABLED).
+ * Uses static imports — safe because it's only called inside PrivyProvider.
+ */
+function usePrivySigner() {
+  const { wallets } = useWallets();
+  const { signTransaction: privySignTx } = useSignTransaction();
+  return { privyWallets: wallets, privySignTx };
+}
+
+/** Dummy for non-Privy mode */
+function useNoopSigner() {
+  return { privyWallets: [] as any[], privySignTx: null as any };
 }
 
 /**
  * Returns a wallet-like object that can sign transactions.
- * Works with both Privy and native adapter.
- * Use this instead of raw useWallet() when you need to sign transactions
- * and the user might be connected via Privy.
+ * Works with both Privy and native adapter — no require() needed.
  */
 export function useSignerWallet() {
   const { publicKey } = useEffectiveWallet();
   const adapterWallet = useWallet();
 
+  // PRIVY_ENABLED is a module-level constant — hook order is deterministic
   // eslint-disable-next-line react-hooks/rules-of-hooks
-  const privyWallets = PRIVY_ENABLED && usePrivyHooks ? usePrivyHooks.useWallets().wallets : [];
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const privySignTx = PRIVY_ENABLED && usePrivyHooks ? usePrivyHooks.useSignTransaction().signTransaction : null;
+  const { privyWallets, privySignTx } = PRIVY_ENABLED ? usePrivySigner() : useNoopSigner();
 
   const signTransaction = useCallback(async (tx: Transaction): Promise<Transaction> => {
-    // Try adapter first
+    // Try adapter first (has native signTransaction)
     if (adapterWallet.publicKey && adapterWallet.signTransaction) {
       return adapterWallet.signTransaction(tx);
     }
@@ -70,7 +72,6 @@ export function useSignerWallet() {
     return sig;
   }, [publicKey, signTransaction]);
 
-  // Build a wallet-like object compatible with PacificaOptionsClient
   const walletForClient = useMemo(() => ({
     publicKey,
     signTransaction,
