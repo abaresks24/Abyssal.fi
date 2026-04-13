@@ -21,19 +21,9 @@ interface Listing {
   createdAt: number;
 }
 
-// ── Mock data ─────────────────────────────────────────────────────────────────
-
-const NOW = Date.now();
-const DAY = 86_400_000;
-
-const MOCK_LISTINGS: Listing[] = [
-  { pubkey: '1111', listingType: 'Resale', seller: '7xKX...AsU', market: 'BTC', side: 'call', strike: 100_000, expiry: NOW + 7 * DAY, size: 0.5, askPrice: 1_800, collateralLocked: 0, createdAt: NOW - DAY },
-  { pubkey: '2222', listingType: 'Written', seller: 'DYw8...5H', market: 'ETH', side: 'put', strike: 3_000, expiry: NOW + 14 * DAY, size: 2, askPrice: 420, collateralLocked: 6_000, createdAt: NOW - 2 * DAY },
-  { pubkey: '3333', listingType: 'Written', seller: 'HU6L...Ro', market: 'SOL', side: 'call', strike: 180, expiry: NOW + 3 * DAY, size: 10, askPrice: 85, collateralLocked: 3_600, createdAt: NOW - 3600_000 },
-  { pubkey: '4444', listingType: 'Resale', seller: '4mFY...GW', market: 'BTC', side: 'put', strike: 90_000, expiry: NOW + 30 * DAY, size: 1, askPrice: 2_100, collateralLocked: 0, createdAt: NOW - 4 * DAY },
-];
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+const DAY = 86_400_000;
 
 function fmt(n: number, dec = 2) {
   return n.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
@@ -74,8 +64,6 @@ function DropdownSelector<T extends string>({ label, value, options, onChange, r
     return () => document.removeEventListener('mousedown', h);
   }, [open]);
 
-  const displayValue = value === 'All' ? 'All' : value;
-
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button
@@ -85,46 +73,35 @@ function DropdownSelector<T extends string>({ label, value, options, onChange, r
           padding: '7px 12px', borderRadius: 6,
           background: open ? 'var(--bg3)' : 'var(--bg2)',
           border: `1px solid ${open ? 'var(--cyan)' : 'var(--border)'}`,
-          cursor: 'pointer',
-          transition: 'all 0.15s',
-          minWidth: 100,
+          cursor: 'pointer', transition: 'all 0.15s', minWidth: 100,
         }}
       >
         <span style={{ fontSize: 10, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 500 }}>
           {label}
         </span>
         <span style={{ fontSize: 12, color: value === 'All' ? 'var(--text3)' : 'var(--text)', fontWeight: 600, flex: 1 }}>
-          {displayValue}
+          {value}
         </span>
-        <svg width="8" height="5" viewBox="0 0 8 5" fill="none" style={{
-          opacity: 0.4,
-          transform: open ? 'rotate(180deg)' : 'none',
-          transition: 'transform 0.15s',
-        }}>
+        <svg width="8" height="5" viewBox="0 0 8 5" fill="none" style={{ opacity: 0.4, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
           <path d="M1 1l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
-
       {open && (
         <div style={{
           position: 'absolute', top: 'calc(100% + 4px)', left: 0,
           minWidth: '100%', maxHeight: 240, overflowY: 'auto',
           background: 'var(--bg2)', border: '1px solid var(--border2)',
-          borderRadius: 8, zIndex: 100,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+          borderRadius: 8, zIndex: 100, boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
         }}>
           {options.map(o => (
-            <button
-              key={o}
-              onClick={() => { onChange(o); setOpen(false); }}
+            <button key={o} onClick={() => { onChange(o); setOpen(false); }}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 width: '100%', padding: '8px 12px',
                 background: value === o ? 'rgba(85,195,233,0.08)' : 'transparent',
                 border: 'none', textAlign: 'left', cursor: 'pointer',
                 fontSize: 12, color: value === o ? 'var(--cyan)' : 'var(--text)',
-                fontWeight: value === o ? 600 : 400,
-                transition: 'background 0.1s',
+                fontWeight: value === o ? 600 : 400, transition: 'background 0.1s',
               }}
             >
               {renderOption ? renderOption(o) : o}
@@ -166,159 +143,19 @@ function ListingRow({ l, onFill }: { l: Listing; onFill: (l: Listing) => void })
       <td style={{ ...td, fontFamily: 'var(--mono)' }}>{fmt(l.size, 4)}</td>
       <td style={{ ...td, fontFamily: 'var(--mono)', color: 'var(--cyan)' }}>${fmt(l.askPrice)}</td>
       <td style={td}>
-        <Badge
-          text={l.listingType === 'Written' ? 'Written' : 'Resale'}
-          color={l.listingType === 'Written' ? 'var(--amber)' : 'var(--cyan)'}
-        />
+        <Badge text={l.listingType === 'Written' ? 'Written' : 'Resale'} color={l.listingType === 'Written' ? 'var(--amber)' : 'var(--cyan)'} />
       </td>
       <td style={{ ...td, color: 'var(--text3)', fontFamily: 'var(--mono)', fontSize: 11 }}>
         {short(l.seller)}
       </td>
       <td style={td}>
-        <button
-          onClick={() => onFill(l)}
-          disabled={isExpired}
-          style={{
-            padding: '4px 12px', fontSize: 11, fontWeight: 600,
-            background: isExpired ? 'var(--bg3)' : 'var(--cyan)',
-            color: isExpired ? 'var(--text3)' : '#0a121c',
-            border: 'none', borderRadius: 4, cursor: isExpired ? 'default' : 'pointer',
-            transition: 'all 0.15s',
-          }}
-        >
-          Buy
-        </button>
+        <button onClick={() => onFill(l)} disabled={isExpired} style={{
+          padding: '4px 12px', fontSize: 11, fontWeight: 600, borderRadius: 4,
+          background: isExpired ? 'var(--bg3)' : 'var(--cyan)', color: isExpired ? 'var(--text3)' : '#0a121c',
+          border: 'none', cursor: isExpired ? 'default' : 'pointer',
+        }}>Buy</button>
       </td>
     </tr>
-  );
-}
-
-function CreateListingPanel({ onClose }: { onClose: () => void }) {
-  const [tab, setTab]       = useState<'resale' | 'write'>('resale');
-  const [market, setMarket] = useState<Market>('BTC');
-  const [side, setSide]     = useState<Side>('call');
-  const [strike, setStrike] = useState('');
-  const [expDays, setExpDays] = useState('7');
-  const [size, setSize]     = useState('');
-  const [ask, setAsk]       = useState('');
-
-  const markets: Market[] = ['BTC', 'ETH', 'SOL', 'NVDA', 'TSLA', 'XAU'];
-
-  return (
-    <div style={{
-      background: 'var(--bg2)', border: '1px solid var(--border)',
-      borderRadius: 8, padding: 20, maxWidth: 480,
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <span style={{ fontWeight: 600, fontSize: 14 }}>Create Listing</span>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 18 }}>×</button>
-      </div>
-
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        {(['resale', 'write'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{
-            padding: '6px 16px', fontSize: 12, borderRadius: 6, cursor: 'pointer',
-            background: tab === t ? 'var(--cyan)' : 'var(--bg3)',
-            color: tab === t ? '#0a121c' : 'var(--text2)',
-            border: 'none', fontWeight: tab === t ? 600 : 400,
-          }}>
-            {t === 'resale' ? 'Resell Position' : 'Write Option'}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'resale' && (
-        <p style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 12, lineHeight: 1.5 }}>
-          Select one of your existing positions and list it for resale.
-        </p>
-      )}
-      {tab === 'write' && (
-        <p style={{ fontSize: 12, color: 'var(--amber)', marginBottom: 12, lineHeight: 1.5 }}>
-          You become the counterparty. You must lock full collateral.
-        </p>
-      )}
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
-        <div>
-          <label style={labelStyle}>Market</label>
-          <select value={market} onChange={e => setMarket(e.target.value as Market)} style={inputStyle}>
-            {markets.map(m => <option key={m}>{m}</option>)}
-          </select>
-        </div>
-        <div>
-          <label style={labelStyle}>Side</label>
-          <select value={side} onChange={e => setSide(e.target.value as Side)} style={inputStyle}>
-            <option value="call">Call</option>
-            <option value="put">Put</option>
-          </select>
-        </div>
-        <div>
-          <label style={labelStyle}>Strike (USDC)</label>
-          <input type="number" value={strike} onChange={e => setStrike(e.target.value)} placeholder="95000" style={inputStyle} />
-        </div>
-        <div>
-          <label style={labelStyle}>Expiry (days)</label>
-          <input type="number" value={expDays} onChange={e => setExpDays(e.target.value)} placeholder="7" style={inputStyle} />
-        </div>
-        <div>
-          <label style={labelStyle}>Size</label>
-          <input type="number" value={size} onChange={e => setSize(e.target.value)} placeholder="1.0" style={inputStyle} />
-        </div>
-        <div>
-          <label style={labelStyle}>Ask Price (USDC)</label>
-          <input type="number" value={ask} onChange={e => setAsk(e.target.value)} placeholder="1200" style={inputStyle} />
-        </div>
-      </div>
-
-      {tab === 'write' && strike && size && (
-        <div style={{ background: 'var(--bg3)', borderRadius: 6, padding: 10, marginBottom: 12, fontSize: 12, fontFamily: 'var(--mono)' }}>
-          <div style={{ color: 'var(--text3)', marginBottom: 2 }}>Required collateral</div>
-          <div style={{ color: 'var(--amber)', fontWeight: 600 }}>
-            {side === 'put'
-              ? `$${fmt(parseFloat(strike || '0') * parseFloat(size || '0'))} USDC`
-              : `≈$${fmt(parseFloat(strike || '0') * parseFloat(size || '0') * 2)} USDC (2× spot cap)`
-            }
-          </div>
-        </div>
-      )}
-
-      <button onClick={() => { alert('Connect program after rebuild — currently using mock data'); onClose(); }} style={{
-        width: '100%', padding: '10px 0', fontWeight: 600, fontSize: 13,
-        background: 'var(--cyan)', color: '#0a121c',
-        border: 'none', borderRadius: 6, cursor: 'pointer',
-      }}>
-        {tab === 'resale' ? 'Create Listing' : 'Lock Collateral & List'}
-      </button>
-    </div>
-  );
-}
-
-function FillConfirm({ listing: l, onConfirm, onCancel }: {
-  listing: Listing; onConfirm: () => void; onCancel: () => void;
-}) {
-  return (
-    <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: 20, marginBottom: 16, maxWidth: 440 }}>
-      <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>Confirm Purchase</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16, fontSize: 12 }}>
-        {[
-          ['Asset', `${l.market} ${l.side.toUpperCase()}`],
-          ['Strike', `$${fmt(l.strike, 0)}`],
-          ['Expires', fmtExpiry(l.expiry)],
-          ['Size', `${fmt(l.size, 4)} ${l.market}`],
-          ['You pay', `$${fmt(l.askPrice)} USDC`],
-          ['Type', l.listingType],
-        ].map(([k, v]) => (
-          <React.Fragment key={k as string}>
-            <span style={{ color: 'var(--text3)' }}>{k}</span>
-            <span style={{ fontFamily: 'var(--mono)', color: 'var(--text)' }}>{v}</span>
-          </React.Fragment>
-        ))}
-      </div>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button onClick={onConfirm} style={{ flex: 1, padding: '8px 0', fontWeight: 600, fontSize: 12, background: 'var(--cyan)', color: '#0a121c', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Confirm</button>
-        <button onClick={onCancel} style={{ flex: 1, padding: '8px 0', fontSize: 12, background: 'var(--bg3)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
-      </div>
-    </div>
   );
 }
 
@@ -334,14 +171,17 @@ export function Marketplace() {
   const [filterSide,   setFilterSide]   = useState<FilterSide>('All');
   const [filterType,   setFilterType]   = useState<FilterType>('All');
   const [showCreate,   setShowCreate]   = useState(false);
-  const [fillTarget,   setFillTarget]   = useState<Listing | null>(null);
 
-  const filtered = useMemo(() => MOCK_LISTINGS.filter(l => {
+  // TODO: Replace with on-chain listing fetch via getProgramAccounts
+  // once the marketplace instructions are deployed
+  const listings: Listing[] = [];
+
+  const filtered = useMemo(() => listings.filter(l => {
     if (filterMarket !== 'All' && l.market !== filterMarket) return false;
     if (filterSide   !== 'All' && l.side !== filterSide)     return false;
     if (filterType   !== 'All' && l.listingType !== filterType) return false;
     return true;
-  }), [filterMarket, filterSide, filterType]);
+  }), [listings, filterMarket, filterSide, filterType]);
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg)' }}>
@@ -375,59 +215,62 @@ export function Marketplace() {
         </button>
       </div>
 
-      {/* Filters — dropdown selectors */}
+      {/* Filters */}
       <div style={{
         padding: '10px 20px', borderBottom: '1px solid var(--border)',
         display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0,
         background: 'var(--bg1)', overflowX: 'auto',
       }}>
-        <DropdownSelector<FilterMarket>
-          label="Market"
-          value={filterMarket}
-          options={['All', 'BTC', 'ETH', 'SOL', 'NVDA', 'TSLA', 'XAU']}
-          onChange={setFilterMarket}
-        />
-        <DropdownSelector<FilterSide>
-          label="Side"
-          value={filterSide}
-          options={['All', 'call', 'put']}
-          onChange={setFilterSide}
+        <DropdownSelector<FilterMarket> label="Market" value={filterMarket} options={['All', 'BTC', 'ETH', 'SOL', 'NVDA', 'TSLA', 'XAU']} onChange={setFilterMarket} />
+        <DropdownSelector<FilterSide> label="Side" value={filterSide} options={['All', 'call', 'put']} onChange={setFilterSide}
           renderOption={o => o === 'All' ? 'All' : (
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ color: o === 'call' ? 'var(--green)' : 'var(--red)', fontWeight: 600 }}>
-                {o === 'call' ? '↗' : '↘'}
-              </span>
+              <span style={{ color: o === 'call' ? 'var(--green)' : 'var(--red)', fontWeight: 600 }}>{o === 'call' ? '↗' : '↘'}</span>
               {o.charAt(0).toUpperCase() + o.slice(1)}
             </span>
           )}
         />
-        <DropdownSelector<FilterType>
-          label="Type"
-          value={filterType}
-          options={['All', 'Resale', 'Written']}
-          onChange={setFilterType}
-        />
+        <DropdownSelector<FilterType> label="Type" value={filterType} options={['All', 'Resale', 'Written']} onChange={setFilterType} />
       </div>
 
-      {/* Table */}
+      {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px' }}>
 
+        {/* Create listing panel */}
         {showCreate && (
           <div style={{ padding: '16px 0' }}>
-            <CreateListingPanel onClose={() => setShowCreate(false)} />
+            <div style={{
+              background: 'var(--bg2)', border: '1px solid var(--border)',
+              borderRadius: 8, padding: 20, maxWidth: 480,
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <span style={{ fontWeight: 600, fontSize: 14 }}>Create Listing</span>
+                <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 18 }}>×</button>
+              </div>
+              <div style={{
+                padding: '20px', textAlign: 'center',
+                background: 'var(--bg3)', borderRadius: 6,
+                color: 'var(--text3)', fontSize: 13, lineHeight: 1.6,
+              }}>
+                <div style={{ fontSize: 28, marginBottom: 12, opacity: 0.4 }}>⏳</div>
+                <div style={{ fontWeight: 600, color: 'var(--text2)', marginBottom: 6 }}>P2P listings coming soon</div>
+                <div>The on-chain marketplace instructions are being finalized. You can trade options directly from the <strong style={{ color: 'var(--cyan)' }}>Trade</strong> tab.</div>
+              </div>
+            </div>
           </div>
         )}
 
-        {fillTarget && (
-          <FillConfirm listing={fillTarget} onConfirm={() => {
-            alert('Connect program after rebuild — currently using mock data');
-            setFillTarget(null);
-          }} onCancel={() => setFillTarget(null)} />
-        )}
-
         {filtered.length === 0 ? (
-          <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>
-            No listings match the current filters.
+          <div style={{
+            padding: '80px 0', textAlign: 'center',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+          }}>
+            <div style={{ fontSize: 40, opacity: 0.3 }}>⛵</div>
+            <div style={{ color: 'var(--text2)', fontSize: 14, fontWeight: 600 }}>No active listings</div>
+            <div style={{ color: 'var(--text3)', fontSize: 12, maxWidth: 340, lineHeight: 1.6 }}>
+              The P2P marketplace will allow reselling positions and writing custom options.
+              For now, trade directly from the Trade tab.
+            </div>
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }}>
@@ -440,19 +283,20 @@ export function Marketplace() {
             </thead>
             <tbody>
               {filtered.map(l => (
-                <ListingRow key={l.pubkey} l={l} onFill={setFillTarget} />
+                <ListingRow key={l.pubkey} l={l} onFill={() => {}} />
               ))}
             </tbody>
           </table>
         )}
 
+        {/* Info box */}
         <div style={{
           margin: '24px 0 8px', padding: 14,
           background: 'var(--bg2)', border: '1px solid var(--border)',
           borderRadius: 8, fontSize: 12, color: 'var(--text3)', lineHeight: 1.6,
         }}>
-          <span style={{ color: 'var(--amber)', fontWeight: 600 }}>Written options</span> — the seller is the counterparty, not the protocol vault.
-          Collateral is locked in escrow until settlement or cancellation.
+          <span style={{ color: 'var(--cyan)', fontWeight: 600 }}>How it will work</span> — List your option positions for resale (NFT transfer), or write custom options with locked collateral.
+          Buyers can fill listings directly. Settlement is handled by the protocol.
         </div>
       </div>
     </div>
@@ -463,21 +307,9 @@ export function Marketplace() {
 
 const th: React.CSSProperties = {
   padding: '8px 10px', fontSize: 10, fontWeight: 600,
-  color: 'var(--text3)', letterSpacing: '0.06em', textTransform: 'uppercase',
-  whiteSpace: 'nowrap',
+  color: 'var(--text3)', letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap',
 };
 
 const td: React.CSSProperties = {
   padding: '10px 10px', fontSize: 12, whiteSpace: 'nowrap',
-};
-
-const labelStyle: React.CSSProperties = {
-  display: 'block', fontSize: 11, color: 'var(--text3)', marginBottom: 4,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '7px 10px', fontSize: 12,
-  background: 'var(--bg3)', border: '1px solid var(--border)',
-  borderRadius: 6, color: 'var(--text)', fontFamily: 'var(--mono)',
-  boxSizing: 'border-box',
 };
