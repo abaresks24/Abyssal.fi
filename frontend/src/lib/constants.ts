@@ -4,7 +4,9 @@ import type { Market, Expiry } from '@/types';
 // ── Program / network ─────────────────────────────────────────────────────────
 // Use || (not ??) so empty strings from Vercel env vars fall through to defaults.
 
-export const PROGRAM_ID       = new PublicKey(process.env.NEXT_PUBLIC_PROGRAM_ID || 'CBkvR8SeN6j8RQKB7dSxG3dza2v71XHmWEe8LgfMW1hG');
+// Hardcoded — the deployed program address must match the IDL.
+// Do NOT override via env var (mismatches cause AccountNotInitialized).
+export const PROGRAM_ID       = new PublicKey('CBkvR8SeN6j8RQKB7dSxG3dza2v71XHmWEe8LgfMW1hG');
 export const USDC_MINT        = new PublicKey(process.env.NEXT_PUBLIC_USDC_MINT || 'USDPqRbLidFGufty2s3oizmDEKdqx7ePTqzDMbf5ZKM');
 export const SOLANA_RPC       = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
 export const VAULT_AUTHORITY  = process.env.NEXT_PUBLIC_VAULT_AUTHORITY || 'AHWUeGsXbx9gd46SBS5SQK4rfQ8rGb1wWAzvZtJ6zdRg';
