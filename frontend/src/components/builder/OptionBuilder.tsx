@@ -49,6 +49,15 @@ export function OptionBuilder() {
     setErr(null);
     setTxSig(null);
     try {
+      // Refresh oracle price before trade (must be < 60s old)
+      setErr('Refreshing price feed…');
+      await fetch('/api/keeper', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ market }),
+      });
+      setErr(null);
+
       const client    = new PacificaOptionsClient(walletForClient as any);
       const authority = new PublicKey(VAULT_AUTHORITY);
       const expiryTs  = Math.floor(expiryToDate(expiry).getTime() / 1000);
