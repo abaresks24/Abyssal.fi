@@ -297,7 +297,7 @@ export function Marketplace() {
           <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>Loading listings from chain…</div>
         ) : filtered.length === 0 ? (
           <div style={{ padding: '60px 0', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-            <div style={{ fontSize: 40, opacity: 0.3 }}>⛵</div>
+            <img src="/logo.svg" alt="" width={48} height={48} style={{ opacity: 0.3, borderRadius: '50%' }} />
             <div style={{ color: 'var(--text2)', fontSize: 14, fontWeight: 600 }}>No active listings</div>
             <div style={{ color: 'var(--text3)', fontSize: 12, maxWidth: 340, lineHeight: 1.6 }}>
               Be the first to list a position. Buy an option in Trade, then list it here for resale.
