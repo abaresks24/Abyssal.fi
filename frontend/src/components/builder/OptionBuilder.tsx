@@ -1,11 +1,11 @@
 'use client';
 import React, { useCallback, useState } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey } from '@solana/web3.js';
 import { useOptionBuilder } from '@/hooks/useOptionBuilder';
 import { useBlackScholes } from '@/hooks/useBlackScholes';
 import { useAFVR } from '@/hooks/useAFVR';
 import { usePacificaWS } from '@/hooks/usePacificaWS';
+import { useSignerWallet } from '@/hooks/useSignerWallet';
 import { PacificaOptionsClient } from '@/lib/anchor_client';
 import { VAULT_AUTHORITY, expiryToDate, solscanTx } from '@/lib/constants';
 import { ActionToggle } from './ActionToggle';
@@ -21,7 +21,7 @@ import { BuyButton } from './BuyButton';
 import { PositionsList } from './PositionsList';
 
 export function OptionBuilder() {
-  const wallet = useWallet();
+  const { publicKey, walletForClient, ready: signerReady } = useSignerWallet();
   const { market, side, action, strike, expiry, size } = useOptionBuilder();
   const { price: spot } = usePacificaWS(market);
   const { iv } = useAFVR(market);
@@ -44,12 +44,12 @@ export function OptionBuilder() {
   const netReceive = totalPremium - fee;
 
   const handleConfirm = useCallback(async () => {
-    if (!wallet.publicKey || !wallet.connected) return;
+    if (!publicKey || !signerReady) return;
     setLoading(true);
     setErr(null);
     setTxSig(null);
     try {
-      const client    = new PacificaOptionsClient(wallet);
+      const client    = new PacificaOptionsClient(walletForClient as any);
       const authority = new PublicKey(VAULT_AUTHORITY);
       const expiryTs  = Math.floor(expiryToDate(expiry).getTime() / 1000);
       const slippage  = 1.05;
@@ -82,7 +82,7 @@ export function OptionBuilder() {
     } finally {
       setLoading(false);
     }
-  }, [wallet, market, side, action, strike, expiry, size, totalPremium, netReceive]);
+  }, [publicKey, signerReady, walletForClient, market, side, action, strike, expiry, size, totalPremium, netReceive]);
 
   return (
     <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
