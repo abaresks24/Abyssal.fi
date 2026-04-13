@@ -1,24 +1,30 @@
 'use client';
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { PublicKey } from '@solana/web3.js';
 import { useEffectiveWallet } from '@/hooks/useEffectiveWallet';
-import type { Market, Side } from '@/types';
+import { useSignerWallet } from '@/hooks/useSignerWallet';
+import { PacificaOptionsClient } from '@/lib/anchor_client';
+import { VAULT_AUTHORITY, solscanTx } from '@/lib/constants';
+import type { Market, Side, OptionType } from '@/types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type ListingType = 'Resale' | 'Written';
 
-interface Listing {
+interface ListingData {
   pubkey: string;
   listingType: ListingType;
   seller: string;
   market: Market;
-  side: Side;
+  optionType: OptionType;
   strike: number;
-  expiry: number;
+  expiry: Date;
   size: number;
   askPrice: number;
   collateralLocked: number;
-  createdAt: number;
+  nonce: number;
+  active: boolean;
+  createdAt: Date;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -29,13 +35,13 @@ function fmt(n: number, dec = 2) {
   return n.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
 
-function fmtExpiry(ms: number) {
-  const diff = ms - Date.now();
+function fmtExpiry(d: Date) {
+  const diff = d.getTime() - Date.now();
   const days = Math.floor(diff / DAY);
   const hrs  = Math.floor((diff % DAY) / 3_600_000);
+  if (diff <= 0) return 'Expired';
   if (days > 0) return `${days}d ${hrs}h`;
-  if (hrs > 0)  return `${hrs}h`;
-  return 'Expired';
+  return `${hrs}h`;
 }
 
 function short(addr: string) {
@@ -43,69 +49,42 @@ function short(addr: string) {
   return `${addr.slice(0, 4)}…${addr.slice(-4)}`;
 }
 
-// ── Dropdown Selector ─────────────────────────────────────────────────────────
+// ── Dropdown ──────────────────────────────────────────────────────────────────
 
-function DropdownSelector<T extends string>({ label, value, options, onChange, renderOption }: {
-  label: string;
-  value: T;
-  options: T[];
-  onChange: (v: T) => void;
-  renderOption?: (o: T) => React.ReactNode;
+function Dropdown<T extends string>({ label, value, options, onChange }: {
+  label: string; value: T; options: T[]; onChange: (v: T) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     if (!open) return;
-    const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, [open]);
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button
-        onClick={() => setOpen(v => !v)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: '7px 12px', borderRadius: 6,
-          background: open ? 'var(--bg3)' : 'var(--bg2)',
-          border: `1px solid ${open ? 'var(--cyan)' : 'var(--border)'}`,
-          cursor: 'pointer', transition: 'all 0.15s', minWidth: 100,
-        }}
-      >
-        <span style={{ fontSize: 10, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 500 }}>
-          {label}
-        </span>
-        <span style={{ fontSize: 12, color: value === 'All' ? 'var(--text3)' : 'var(--text)', fontWeight: 600, flex: 1 }}>
-          {value}
-        </span>
+      <button onClick={() => setOpen(v => !v)} style={{
+        display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', borderRadius: 6,
+        background: open ? 'var(--bg3)' : 'var(--bg2)', border: `1px solid ${open ? 'var(--cyan)' : 'var(--border)'}`,
+        cursor: 'pointer', minWidth: 100, transition: 'all 0.15s',
+      }}>
+        <span style={{ fontSize: 10, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 500 }}>{label}</span>
+        <span style={{ fontSize: 12, color: value === 'All' ? 'var(--text3)' : 'var(--text)', fontWeight: 600, flex: 1 }}>{value}</span>
         <svg width="8" height="5" viewBox="0 0 8 5" fill="none" style={{ opacity: 0.4, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
           <path d="M1 1l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
       {open && (
-        <div style={{
-          position: 'absolute', top: 'calc(100% + 4px)', left: 0,
-          minWidth: '100%', maxHeight: 240, overflowY: 'auto',
-          background: 'var(--bg2)', border: '1px solid var(--border2)',
-          borderRadius: 8, zIndex: 100, boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
-        }}>
+        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, minWidth: '100%', background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 8, zIndex: 100, boxShadow: '0 8px 24px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
           {options.map(o => (
-            <button key={o} onClick={() => { onChange(o); setOpen(false); }}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                width: '100%', padding: '8px 12px',
-                background: value === o ? 'rgba(85,195,233,0.08)' : 'transparent',
-                border: 'none', textAlign: 'left', cursor: 'pointer',
-                fontSize: 12, color: value === o ? 'var(--cyan)' : 'var(--text)',
-                fontWeight: value === o ? 600 : 400, transition: 'background 0.1s',
-              }}
-            >
-              {renderOption ? renderOption(o) : o}
-              {value === o && <span style={{ fontSize: 10, color: 'var(--cyan)' }}>✓</span>}
+            <button key={o} onClick={() => { onChange(o); setOpen(false); }} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '8px 12px',
+              background: value === o ? 'rgba(85,195,233,0.08)' : 'transparent', border: 'none', textAlign: 'left', cursor: 'pointer',
+              fontSize: 12, color: value === o ? 'var(--cyan)' : 'var(--text)', fontWeight: value === o ? 600 : 400,
+            }}>
+              {o}{value === o && <span style={{ fontSize: 10, color: 'var(--cyan)' }}>✓</span>}
             </button>
           ))}
         </div>
@@ -114,162 +93,214 @@ function DropdownSelector<T extends string>({ label, value, options, onChange, r
   );
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ── Badge ─────────────────────────────────────────────────────────────────────
 
 function Badge({ text, color }: { text: string; color: string }) {
   return (
     <span style={{
-      display: 'inline-block', padding: '1px 6px', borderRadius: 3,
-      fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 600, letterSpacing: '0.04em',
-      background: `${color}22`, color, border: `1px solid ${color}44`,
-    }}>
-      {text}
-    </span>
+      display: 'inline-block', padding: '1px 6px', borderRadius: 3, fontSize: 10,
+      fontFamily: 'var(--mono)', fontWeight: 600, background: `${color}22`, color, border: `1px solid ${color}44`,
+    }}>{text}</span>
   );
 }
 
-function ListingRow({ l, onFill }: { l: Listing; onFill: (l: Listing) => void }) {
-  const isExpired = l.expiry < Date.now();
+// ── Create Listing Form ───────────────────────────────────────────────────────
+
+function CreateListingForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const { walletForClient, ready } = useSignerWallet();
+  const { publicKey } = useEffectiveWallet();
+
+  const [market, setMarket] = useState<Market>('BTC');
+  const [side, setSide]     = useState<Side>('call');
+  const [strike, setStrike] = useState('');
+  const [expDays, setExpDays] = useState('7');
+  const [size, setSize]     = useState('');
+  const [ask, setAsk]       = useState('');
+  const [loading, setLoading] = useState(false);
+  const [err, setErr]       = useState<string | null>(null);
+  const [txSig, setTxSig]   = useState<string | null>(null);
+
+  const markets: Market[] = ['BTC', 'ETH', 'SOL', 'NVDA', 'TSLA', 'XAU'];
+
+  const handleSubmit = async () => {
+    if (!publicKey || !ready) return;
+    const s = parseFloat(strike); const sz = parseFloat(size); const a = parseFloat(ask); const d = parseInt(expDays);
+    if (!s || !sz || !a || !d) { setErr('Fill all fields'); return; }
+
+    setLoading(true); setErr(null); setTxSig(null);
+    try {
+      const client = new PacificaOptionsClient(walletForClient as any);
+      const authority = new PublicKey(VAULT_AUTHORITY);
+      const expiryDate = new Date(); expiryDate.setDate(expiryDate.getDate() + d); expiryDate.setHours(8, 0, 0, 0);
+      const expiryTs = Math.floor(expiryDate.getTime() / 1000);
+
+      const sig = await client.listForResale({
+        vaultAuthority: authority,
+        market,
+        optionType: side === 'call' ? 'Call' : 'Put',
+        strikeUsdc: s,
+        expiry: expiryTs,
+        sizeUnderlying: sz,
+        askPriceUsdc: a,
+      });
+      setTxSig(sig);
+      onSuccess();
+    } catch (e: any) {
+      setErr(e?.message ?? 'Transaction failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-      <td style={td}><span style={{ fontWeight: 600 }}>{l.market}</span></td>
-      <td style={td}>
-        <Badge text={l.side.toUpperCase()} color={l.side === 'call' ? 'var(--green)' : 'var(--red)'} />
-      </td>
-      <td style={{ ...td, fontFamily: 'var(--mono)' }}>${fmt(l.strike, 0)}</td>
-      <td style={{ ...td, fontFamily: 'var(--mono)', color: isExpired ? 'var(--red)' : 'var(--text2)' }}>
-        {fmtExpiry(l.expiry)}
-      </td>
-      <td style={{ ...td, fontFamily: 'var(--mono)' }}>{fmt(l.size, 4)}</td>
-      <td style={{ ...td, fontFamily: 'var(--mono)', color: 'var(--cyan)' }}>${fmt(l.askPrice)}</td>
-      <td style={td}>
-        <Badge text={l.listingType === 'Written' ? 'Written' : 'Resale'} color={l.listingType === 'Written' ? 'var(--amber)' : 'var(--cyan)'} />
-      </td>
-      <td style={{ ...td, color: 'var(--text3)', fontFamily: 'var(--mono)', fontSize: 11 }}>
-        {short(l.seller)}
-      </td>
-      <td style={td}>
-        <button onClick={() => onFill(l)} disabled={isExpired} style={{
-          padding: '4px 12px', fontSize: 11, fontWeight: 600, borderRadius: 4,
-          background: isExpired ? 'var(--bg3)' : 'var(--cyan)', color: isExpired ? 'var(--text3)' : '#0a121c',
-          border: 'none', cursor: isExpired ? 'default' : 'pointer',
-        }}>Buy</button>
-      </td>
-    </tr>
+    <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: 20, maxWidth: 480 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <span style={{ fontWeight: 600, fontSize: 14 }}>List Position for Resale</span>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 18 }}>×</button>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+        <div><label style={lbl}>Market</label><select value={market} onChange={e => setMarket(e.target.value as Market)} style={inp}>{markets.map(m => <option key={m}>{m}</option>)}</select></div>
+        <div><label style={lbl}>Side</label><select value={side} onChange={e => setSide(e.target.value as Side)} style={inp}><option value="call">Call</option><option value="put">Put</option></select></div>
+        <div><label style={lbl}>Strike (USDC)</label><input type="number" value={strike} onChange={e => setStrike(e.target.value)} placeholder="95000" style={inp} /></div>
+        <div><label style={lbl}>Expiry (days)</label><input type="number" value={expDays} onChange={e => setExpDays(e.target.value)} placeholder="7" style={inp} /></div>
+        <div><label style={lbl}>Size</label><input type="number" value={size} onChange={e => setSize(e.target.value)} placeholder="0.1" style={inp} /></div>
+        <div><label style={lbl}>Ask Price (USDC)</label><input type="number" value={ask} onChange={e => setAsk(e.target.value)} placeholder="500" style={inp} /></div>
+      </div>
+
+      <p style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 12, lineHeight: 1.5 }}>
+        You must own a position for this series. The position transfers to the buyer on fill.
+      </p>
+
+      <button onClick={handleSubmit} disabled={loading || !ready} style={{
+        width: '100%', padding: '10px 0', fontWeight: 600, fontSize: 13, borderRadius: 6,
+        background: ready ? 'var(--cyan)' : 'var(--bg3)', color: ready ? '#0a121c' : 'var(--text3)',
+        border: 'none', cursor: ready && !loading ? 'pointer' : 'default', opacity: loading ? 0.7 : 1,
+      }}>
+        {loading ? 'Creating listing…' : 'List for Resale'}
+      </button>
+
+      {err && <div style={{ marginTop: 8, fontSize: 11, color: 'var(--red)', padding: '6px 10px', background: 'var(--red-dim)', borderRadius: 4 }}>{err}</div>}
+      {txSig && <div style={{ marginTop: 8, fontSize: 11, color: 'var(--green)', padding: '6px 10px', background: 'var(--green-dim)', borderRadius: 4 }}>
+        Listed! <a href={solscanTx(txSig)} target="_blank" rel="noreferrer" style={{ color: 'var(--cyan)' }}>View on Solscan</a>
+      </div>}
+    </div>
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+// ── Main ──────────────────────────────────────────────────────────────────────
 
 type FilterMarket = Market | 'All';
-type FilterSide   = Side   | 'All';
+type FilterSide   = 'call' | 'put' | 'All';
 type FilterType   = ListingType | 'All';
 
 export function Marketplace() {
   const { publicKey } = useEffectiveWallet();
+  const { walletForClient, ready } = useSignerWallet();
   const [filterMarket, setFilterMarket] = useState<FilterMarket>('All');
   const [filterSide,   setFilterSide]   = useState<FilterSide>('All');
   const [filterType,   setFilterType]   = useState<FilterType>('All');
   const [showCreate,   setShowCreate]   = useState(false);
+  const [listings,     setListings]     = useState<ListingData[]>([]);
+  const [loading,      setLoading]      = useState(true);
+  const [fillLoading,  setFillLoading]  = useState<string | null>(null);
+  const [txFeedback,   setTxFeedback]   = useState<{ type: 'ok' | 'err'; msg: string } | null>(null);
 
-  // TODO: Replace with on-chain listing fetch via getProgramAccounts
-  // once the marketplace instructions are deployed
-  const listings: Listing[] = [];
+  const fetchListings = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await PacificaOptionsClient.getActiveListings();
+      setListings(data);
+    } catch { setListings([]); }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchListings(); }, [fetchListings]);
 
   const filtered = useMemo(() => listings.filter(l => {
     if (filterMarket !== 'All' && l.market !== filterMarket) return false;
-    if (filterSide   !== 'All' && l.side !== filterSide)     return false;
-    if (filterType   !== 'All' && l.listingType !== filterType) return false;
+    if (filterSide !== 'All' && l.optionType !== (filterSide === 'call' ? 'Call' : 'Put')) return false;
+    if (filterType !== 'All' && l.listingType !== filterType) return false;
     return true;
   }), [listings, filterMarket, filterSide, filterType]);
+
+  const handleFill = async (l: ListingData) => {
+    if (!publicKey || !ready) return;
+    setFillLoading(l.pubkey); setTxFeedback(null);
+    try {
+      const client = new PacificaOptionsClient(walletForClient as any);
+      const authority = new PublicKey(VAULT_AUTHORITY);
+      const sig = await client.fillResaleListing({
+        vaultAuthority: authority,
+        listingPubkey: new PublicKey(l.pubkey),
+        sellerPubkey: new PublicKey(l.seller),
+        nonce: l.nonce,
+        market: l.market,
+        optionType: l.optionType,
+        strikeUsdc: l.strike,
+        expiry: Math.floor(l.expiry.getTime() / 1000),
+      });
+      setTxFeedback({ type: 'ok', msg: sig });
+      fetchListings();
+    } catch (e: any) {
+      setTxFeedback({ type: 'err', msg: e?.message ?? 'Fill failed' });
+    }
+    setFillLoading(null);
+  };
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg)' }}>
 
       {/* Header */}
-      <div style={{
-        padding: '14px 20px', borderBottom: '1px solid var(--border)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
-      }}>
+      <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontWeight: 700, fontSize: 16 }}>P2P Marketplace</span>
-          <span style={{
-            fontSize: 11, padding: '2px 8px', borderRadius: 10,
-            background: 'var(--cyan-dim)', color: 'var(--cyan)',
-            border: '1px solid rgba(85,195,233,0.2)', fontWeight: 600,
-          }}>
+          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: 'var(--cyan-dim)', color: 'var(--cyan)', border: '1px solid rgba(85,195,233,0.2)', fontWeight: 600 }}>
             {filtered.length}
           </span>
+          <button onClick={fetchListings} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 13 }} title="Refresh">↻</button>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          disabled={!publicKey}
-          style={{
-            padding: '7px 16px', fontWeight: 600, fontSize: 12, borderRadius: 6,
-            background: publicKey ? 'var(--cyan)' : 'var(--bg3)',
-            color: publicKey ? '#0a121c' : 'var(--text3)',
-            border: 'none', cursor: publicKey ? 'pointer' : 'default',
-          }}
-        >
-          {publicKey ? '+ Create Listing' : 'Connect to list'}
+        <button onClick={() => setShowCreate(true)} disabled={!publicKey} style={{
+          padding: '7px 16px', fontWeight: 600, fontSize: 12, borderRadius: 6,
+          background: publicKey ? 'var(--cyan)' : 'var(--bg3)', color: publicKey ? '#0a121c' : 'var(--text3)',
+          border: 'none', cursor: publicKey ? 'pointer' : 'default',
+        }}>
+          {publicKey ? '+ List Position' : 'Connect to list'}
         </button>
       </div>
 
       {/* Filters */}
-      <div style={{
-        padding: '10px 20px', borderBottom: '1px solid var(--border)',
-        display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0,
-        background: 'var(--bg1)', overflowX: 'auto',
-      }}>
-        <DropdownSelector<FilterMarket> label="Market" value={filterMarket} options={['All', 'BTC', 'ETH', 'SOL', 'NVDA', 'TSLA', 'XAU']} onChange={setFilterMarket} />
-        <DropdownSelector<FilterSide> label="Side" value={filterSide} options={['All', 'call', 'put']} onChange={setFilterSide}
-          renderOption={o => o === 'All' ? 'All' : (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ color: o === 'call' ? 'var(--green)' : 'var(--red)', fontWeight: 600 }}>{o === 'call' ? '↗' : '↘'}</span>
-              {o.charAt(0).toUpperCase() + o.slice(1)}
-            </span>
-          )}
-        />
-        <DropdownSelector<FilterType> label="Type" value={filterType} options={['All', 'Resale', 'Written']} onChange={setFilterType} />
+      <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0, background: 'var(--bg1)', overflowX: 'auto' }}>
+        <Dropdown<FilterMarket> label="Market" value={filterMarket} options={['All', 'BTC', 'ETH', 'SOL', 'NVDA', 'TSLA', 'XAU']} onChange={setFilterMarket} />
+        <Dropdown<FilterSide> label="Side" value={filterSide} options={['All', 'call', 'put']} onChange={setFilterSide} />
+        <Dropdown<FilterType> label="Type" value={filterType} options={['All', 'Resale', 'Written']} onChange={setFilterType} />
       </div>
+
+      {/* Tx feedback */}
+      {txFeedback && (
+        <div style={{ padding: '8px 20px', borderBottom: '1px solid var(--border)', fontSize: 12, color: txFeedback.type === 'ok' ? 'var(--green)' : 'var(--red)', background: txFeedback.type === 'ok' ? 'var(--green-dim)' : 'var(--red-dim)' }}>
+          {txFeedback.type === 'ok' ? <>Filled! <a href={solscanTx(txFeedback.msg)} target="_blank" rel="noreferrer" style={{ color: 'var(--cyan)' }}>Solscan</a></> : txFeedback.msg}
+          <button onClick={() => setTxFeedback(null)} style={{ marginLeft: 12, background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 10 }}>✕</button>
+        </div>
+      )}
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px' }}>
 
-        {/* Create listing panel */}
         {showCreate && (
           <div style={{ padding: '16px 0' }}>
-            <div style={{
-              background: 'var(--bg2)', border: '1px solid var(--border)',
-              borderRadius: 8, padding: 20, maxWidth: 480,
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <span style={{ fontWeight: 600, fontSize: 14 }}>Create Listing</span>
-                <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 18 }}>×</button>
-              </div>
-              <div style={{
-                padding: '20px', textAlign: 'center',
-                background: 'var(--bg3)', borderRadius: 6,
-                color: 'var(--text3)', fontSize: 13, lineHeight: 1.6,
-              }}>
-                <div style={{ fontSize: 28, marginBottom: 12, opacity: 0.4 }}>⏳</div>
-                <div style={{ fontWeight: 600, color: 'var(--text2)', marginBottom: 6 }}>P2P listings coming soon</div>
-                <div>The on-chain marketplace instructions are being finalized. You can trade options directly from the <strong style={{ color: 'var(--cyan)' }}>Trade</strong> tab.</div>
-              </div>
-            </div>
+            <CreateListingForm onClose={() => setShowCreate(false)} onSuccess={fetchListings} />
           </div>
         )}
 
-        {filtered.length === 0 ? (
-          <div style={{
-            padding: '80px 0', textAlign: 'center',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
-          }}>
+        {loading ? (
+          <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>Loading listings from chain…</div>
+        ) : filtered.length === 0 ? (
+          <div style={{ padding: '60px 0', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
             <div style={{ fontSize: 40, opacity: 0.3 }}>⛵</div>
             <div style={{ color: 'var(--text2)', fontSize: 14, fontWeight: 600 }}>No active listings</div>
             <div style={{ color: 'var(--text3)', fontSize: 12, maxWidth: 340, lineHeight: 1.6 }}>
-              The P2P marketplace will allow reselling positions and writing custom options.
-              For now, trade directly from the Trade tab.
+              Be the first to list a position. Buy an option in Trade, then list it here for resale.
             </div>
           </div>
         ) : (
@@ -277,39 +308,52 @@ export function Marketplace() {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Market', 'Side', 'Strike', 'Expires', 'Size', 'Ask', 'Type', 'Seller', ''].map(h => (
-                  <th key={h} style={{ ...th, textAlign: h === '' ? 'right' : 'left' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 10px', fontSize: 10, fontWeight: 600, color: 'var(--text3)', letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap', textAlign: h === '' ? 'right' : 'left' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.map(l => (
-                <ListingRow key={l.pubkey} l={l} onFill={() => {}} />
-              ))}
+              {filtered.map(l => {
+                const isExpired = l.expiry.getTime() < Date.now();
+                const isMine = publicKey?.toBase58() === l.seller;
+                return (
+                  <tr key={l.pubkey} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td style={td}><span style={{ fontWeight: 600 }}>{l.market}</span></td>
+                    <td style={td}><Badge text={l.optionType.toUpperCase()} color={l.optionType === 'Call' ? 'var(--green)' : 'var(--red)'} /></td>
+                    <td style={{ ...td, fontFamily: 'var(--mono)' }}>${fmt(l.strike, 0)}</td>
+                    <td style={{ ...td, fontFamily: 'var(--mono)', color: isExpired ? 'var(--red)' : 'var(--text2)' }}>{fmtExpiry(l.expiry)}</td>
+                    <td style={{ ...td, fontFamily: 'var(--mono)' }}>{fmt(l.size, 4)}</td>
+                    <td style={{ ...td, fontFamily: 'var(--mono)', color: 'var(--cyan)' }}>${fmt(l.askPrice)}</td>
+                    <td style={td}><Badge text={l.listingType} color={l.listingType === 'Written' ? 'var(--amber)' : 'var(--cyan)'} /></td>
+                    <td style={{ ...td, color: 'var(--text3)', fontFamily: 'var(--mono)', fontSize: 11 }}>{short(l.seller)}</td>
+                    <td style={{ ...td, textAlign: 'right' }}>
+                      {isMine ? (
+                        <span style={{ fontSize: 11, color: 'var(--text3)' }}>Your listing</span>
+                      ) : (
+                        <button onClick={() => handleFill(l)} disabled={isExpired || fillLoading === l.pubkey || !ready} style={{
+                          padding: '4px 12px', fontSize: 11, fontWeight: 600, borderRadius: 4,
+                          background: isExpired ? 'var(--bg3)' : 'var(--cyan)', color: isExpired ? 'var(--text3)' : '#0a121c',
+                          border: 'none', cursor: isExpired || !ready ? 'default' : 'pointer', opacity: fillLoading === l.pubkey ? 0.6 : 1,
+                        }}>
+                          {fillLoading === l.pubkey ? '…' : 'Buy'}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
 
-        {/* Info box */}
-        <div style={{
-          margin: '24px 0 8px', padding: 14,
-          background: 'var(--bg2)', border: '1px solid var(--border)',
-          borderRadius: 8, fontSize: 12, color: 'var(--text3)', lineHeight: 1.6,
-        }}>
-          <span style={{ color: 'var(--cyan)', fontWeight: 600 }}>How it will work</span> — List your option positions for resale (NFT transfer), or write custom options with locked collateral.
-          Buyers can fill listings directly. Settlement is handled by the protocol.
+        <div style={{ margin: '24px 0 8px', padding: 14, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12, color: 'var(--text3)', lineHeight: 1.6 }}>
+          <span style={{ color: 'var(--cyan)', fontWeight: 600 }}>How it works</span> — List your option positions for resale (NFT transfer). Buyers fill listings by paying the ask price in USDP. The position transfers to the buyer on-chain.
         </div>
       </div>
     </div>
   );
 }
 
-// ── Shared styles ─────────────────────────────────────────────────────────────
-
-const th: React.CSSProperties = {
-  padding: '8px 10px', fontSize: 10, fontWeight: 600,
-  color: 'var(--text3)', letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap',
-};
-
-const td: React.CSSProperties = {
-  padding: '10px 10px', fontSize: 12, whiteSpace: 'nowrap',
-};
+const td: React.CSSProperties = { padding: '10px 10px', fontSize: 12, whiteSpace: 'nowrap' };
+const lbl: React.CSSProperties = { display: 'block', fontSize: 11, color: 'var(--text3)', marginBottom: 4 };
+const inp: React.CSSProperties = { width: '100%', padding: '7px 10px', fontSize: 12, background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)', fontFamily: 'var(--mono)', boxSizing: 'border-box' };

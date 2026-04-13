@@ -873,4 +873,208 @@ export class PacificaOptionsClient {
       } as any)
       .rpc();
   }
+
+  // ── P2P Marketplace ─────────────────────────────────────────────────────────
+
+  static findListingPDA(seller: PublicKey, nonce: BN): [PublicKey, number] {
+    return PublicKey.findProgramAddressSync(
+      [Buffer.from('listing'), seller.toBuffer(), nonce.toArrayLike(Buffer, 'le', 8)],
+      PROGRAM_PUBKEY,
+    );
+  }
+
+  static findWrittenPositionPDA(buyer: PublicKey, listing: PublicKey): [PublicKey, number] {
+    return PublicKey.findProgramAddressSync(
+      [Buffer.from('written_position'), buyer.toBuffer(), listing.toBuffer()],
+      PROGRAM_PUBKEY,
+    );
+  }
+
+  static findEscrowPDA(listing: PublicKey): [PublicKey, number] {
+    return PublicKey.findProgramAddressSync(
+      [Buffer.from('listing_escrow'), listing.toBuffer()],
+      PROGRAM_PUBKEY,
+    );
+  }
+
+  static findEscrowUsdcPDA(listing: PublicKey): [PublicKey, number] {
+    return PublicKey.findProgramAddressSync(
+      [Buffer.from('listing_escrow_usdc'), listing.toBuffer()],
+      PROGRAM_PUBKEY,
+    );
+  }
+
+  /** Create a resale listing for an existing position. */
+  async listForResale(params: {
+    vaultAuthority: PublicKey;
+    market: Market;
+    optionType: OptionType;
+    strikeUsdc: number;
+    expiry: number;
+    sizeUnderlying: number;
+    askPriceUsdc: number;
+  }): Promise<string> {
+    if (!this.wallet.publicKey) throw new Error('Wallet not connected');
+    const seller = this.wallet.publicKey;
+    const marketDisc  = MARKET_DISCRIMINANTS[params.market];
+    const optTypeDisc = OPTION_TYPE_DISCRIMINANTS[params.optionType];
+    const strike      = new BN(Math.round(params.strikeUsdc * SCALE));
+    const expiry      = new BN(params.expiry);
+    const size        = new BN(Math.round(params.sizeUnderlying * SCALE));
+    const askPrice    = new BN(Math.round(params.askPriceUsdc * SCALE));
+    const nonce       = new BN(Date.now());
+
+    const [vault]    = findVaultPDA(params.vaultAuthority);
+    const [position] = findPositionPDA(seller, vault, marketDisc, optTypeDisc, strike, expiry);
+    const [listing]  = PacificaOptionsClient.findListingPDA(seller, nonce);
+
+    return await this.program.methods
+      .listForResale({
+        marketDiscriminant: marketDisc,
+        optionType: optTypeDisc,
+        strike,
+        expiry,
+        size,
+        askPrice,
+        nonce,
+      })
+      .accounts({
+        vault,
+        position,
+        listing,
+        seller,
+        systemProgram: SystemProgram.programId,
+      } as any)
+      .rpc();
+  }
+
+  /** Fill a resale listing — transfers position from seller to buyer. */
+  async fillResaleListing(params: {
+    vaultAuthority: PublicKey;
+    listingPubkey: PublicKey;
+    sellerPubkey: PublicKey;
+    nonce: number;
+    market: Market;
+    optionType: OptionType;
+    strikeUsdc: number;
+    expiry: number;
+  }): Promise<string> {
+    if (!this.wallet.publicKey) throw new Error('Wallet not connected');
+    const buyer = this.wallet.publicKey;
+    const marketDisc  = MARKET_DISCRIMINANTS[params.market];
+    const optTypeDisc = OPTION_TYPE_DISCRIMINANTS[params.optionType];
+    const strike      = new BN(Math.round(params.strikeUsdc * SCALE));
+    const expiry      = new BN(params.expiry);
+
+    const [vault]          = findVaultPDA(params.vaultAuthority);
+    const [listing]        = PacificaOptionsClient.findListingPDA(params.sellerPubkey, new BN(params.nonce));
+    const [sellerPosition] = findPositionPDA(params.sellerPubkey, vault, marketDisc, optTypeDisc, strike, expiry);
+    const [buyerPosition]  = findPositionPDA(buyer, vault, marketDisc, optTypeDisc, strike, expiry);
+
+    const usdcMint   = await this.getVaultUsdcMint(params.vaultAuthority);
+    const buyerUsdc  = await getAssociatedTokenAddress(usdcMint, buyer);
+    const sellerUsdc = await getAssociatedTokenAddress(usdcMint, params.sellerPubkey);
+
+    return await this.program.methods
+      .fillResaleListing()
+      .accounts({
+        vault,
+        listing,
+        sellerPosition,
+        buyerPosition,
+        buyerUsdc,
+        sellerUsdc,
+        buyer,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        rent: SYSVAR_RENT_PUBKEY,
+      } as any)
+      .rpc();
+  }
+
+  /** Cancel a resale listing. */
+  async cancelResaleListing(params: {
+    vaultAuthority: PublicKey;
+    nonce: number;
+  }): Promise<string> {
+    if (!this.wallet.publicKey) throw new Error('Wallet not connected');
+    const seller = this.wallet.publicKey;
+    const [vault]   = findVaultPDA(params.vaultAuthority);
+    const [listing] = PacificaOptionsClient.findListingPDA(seller, new BN(params.nonce));
+
+    return await this.program.methods
+      .cancelResaleListing()
+      .accounts({
+        vault,
+        listing,
+        seller,
+        systemProgram: SystemProgram.programId,
+      } as any)
+      .rpc();
+  }
+
+  /** Fetch all active listings from on-chain. */
+  static async getActiveListings(): Promise<{
+    pubkey: string;
+    listingType: 'Resale' | 'Written';
+    seller: string;
+    market: Market;
+    optionType: OptionType;
+    strike: number;
+    expiry: Date;
+    size: number;
+    askPrice: number;
+    collateralLocked: number;
+    nonce: number;
+    active: boolean;
+    createdAt: Date;
+  }[]> {
+    try {
+      const connection = new Connection(SOLANA_RPC, 'confirmed');
+      const dummy = {
+        publicKey: PublicKey.default,
+        signTransaction: async (tx: web3.Transaction) => tx,
+        signAllTransactions: async (txs: web3.Transaction[]) => txs,
+      };
+      const provider = new AnchorProvider(connection, dummy as any, { commitment: 'confirmed' });
+      const program  = new Program<PacificaOptions>(IDL as any, provider);
+
+      const MARKET_FROM_ANCHOR: Record<string, Market> = {
+        btc: 'BTC', eth: 'ETH', sol: 'SOL',
+        nvda: 'NVDA', tsla: 'TSLA', pltr: 'PLTR',
+        crcl: 'CRCL', hood: 'HOOD', sp500: 'SP500',
+        xau: 'XAU', xag: 'XAG', paxg: 'PAXG',
+        platinum: 'PLATINUM', natgas: 'NATGAS', copper: 'COPPER',
+      };
+
+      const accounts = await program.account.optionListing.all();
+
+      return accounts
+        .map(({ publicKey, account }: any) => {
+          const a = account;
+          const marketKey = Object.keys(a.market)[0];
+          const optTypeKey = Object.keys(a.optionType)[0];
+          const listingTypeKey = Object.keys(a.listingType)[0];
+          return {
+            pubkey: publicKey.toBase58(),
+            listingType: listingTypeKey === 'resale' ? 'Resale' as const : 'Written' as const,
+            seller: (a.seller as PublicKey).toBase58(),
+            market: (MARKET_FROM_ANCHOR[marketKey] ?? 'BTC') as Market,
+            optionType: (optTypeKey === 'call' ? 'Call' : 'Put') as OptionType,
+            strike: (a.strike as BN).toNumber() / SCALE,
+            expiry: new Date((a.expiry as BN).toNumber() * 1000),
+            size: (a.size as BN).toNumber() / SCALE,
+            askPrice: (a.askPrice as BN).toNumber() / SCALE,
+            collateralLocked: (a.collateralLocked as BN).toNumber() / SCALE,
+            nonce: (a.nonce as BN).toNumber(),
+            active: a.active as boolean,
+            createdAt: new Date((a.createdAt as BN).toNumber() * 1000),
+          };
+        })
+        .filter(l => l.active);
+    } catch (e) {
+      console.error('[getActiveListings]', e);
+      return [];
+    }
+  }
 }
