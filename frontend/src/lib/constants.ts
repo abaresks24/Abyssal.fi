@@ -58,9 +58,9 @@ export function computeStrikes(spot: number): number[] {
 
 // ── Expiries ──────────────────────────────────────────────────────────────────
 
-export const EXPIRY_OPTIONS: Expiry[] = ['1D', '3D', '7D', '14D', '30D'];
+export const EXPIRY_OPTIONS: string[] = ['1D', '3D', '7D', '14D', '30D'];
 
-export const EXPIRY_TO_YEARS: Record<Expiry, number> = {
+export const EXPIRY_TO_YEARS: Record<string, number> = {
   '1D':  1 / 365,
   '3D':  3 / 365,
   '7D':  7 / 365,
@@ -68,12 +68,20 @@ export const EXPIRY_TO_YEARS: Record<Expiry, number> = {
   '30D': 30 / 365,
 };
 
-export function expiryToDate(expiry: Expiry): Date {
+/** Convert any expiry string like "7D" or "45D" to a Date (8:00 UTC). */
+export function expiryToDate(expiry: string): Date {
   const days = parseInt(expiry, 10);
   const d = new Date();
-  d.setDate(d.getDate() + days);
+  d.setDate(d.getDate() + (isNaN(days) ? 7 : days));
   d.setHours(8, 0, 0, 0);
   return d;
+}
+
+/** Convert any expiry string to fractional years for Black-Scholes. */
+export function expiryStringToYears(expiry: string): number {
+  const days = parseInt(expiry, 10);
+  if (isNaN(days) || days <= 0) return 7 / 365;
+  return days / 365;
 }
 
 // ── Pacifica API endpoints ────────────────────────────────────────────────────

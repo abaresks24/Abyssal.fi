@@ -1,5 +1,5 @@
 import type { Side, Greeks, Expiry } from '@/types';
-import { EXPIRY_TO_YEARS } from '@/lib/constants';
+import { EXPIRY_TO_YEARS, expiryStringToYears } from '@/lib/constants';
 
 // ── Math helpers ──────────────────────────────────────────────────────────────
 
@@ -99,7 +99,7 @@ export function buildOptionChain(
 ): OptionSeries[] {
   const series: OptionSeries[] = [];
   for (const expiry of expiries) {
-    const T = EXPIRY_TO_YEARS[expiry];
+    const T = expiryStringToYears(expiry);
     for (const strike of strikes) {
       for (const side of ['call', 'put'] as Side[]) {
         const premium = blackScholesPrice(S, strike, T, sigma, 0, side);

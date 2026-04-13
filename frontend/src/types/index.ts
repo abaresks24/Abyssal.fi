@@ -9,9 +9,21 @@ export type CryptoMarket = 'BTC' | 'ETH' | 'SOL';
 export type Side = 'call' | 'put';
 export type Action = 'buy' | 'sell';
 
-export type Expiry = '1D' | '3D' | '7D' | '14D' | '30D';
+/** Expiry as a string like "7D", "1D", "45D" — any number of days followed by 'D'. */
+export type Expiry = string;
 
-export const EXPIRY_TO_YEARS: Record<Expiry, number> = {
+/** Preset expiry options shown as quick-select buttons. */
+export const EXPIRY_PRESETS: string[] = ['1D', '3D', '7D', '14D', '30D'];
+
+/** Parse an expiry string like "7D" to fractional years for Black-Scholes. */
+export function expiryToYears(expiry: Expiry): number {
+  const days = parseInt(expiry, 10);
+  if (isNaN(days) || days <= 0) return 7 / 365;
+  return days / 365;
+}
+
+/** Legacy compat — kept for code that still references the old map. */
+export const EXPIRY_TO_YEARS: Record<string, number> = {
   '1D':  1 / 365,
   '3D':  3 / 365,
   '7D':  7 / 365,
@@ -19,7 +31,7 @@ export const EXPIRY_TO_YEARS: Record<Expiry, number> = {
   '30D': 30 / 365,
 };
 
-export const EXPIRY_LABELS: Expiry[] = ['1D', '3D', '7D', '14D', '30D'];
+export const EXPIRY_LABELS: string[] = ['1D', '3D', '7D', '14D', '30D'];
 
 // ── Price / Market data ───────────────────────────────────────────────────────
 

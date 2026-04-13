@@ -1,7 +1,7 @@
 'use client';
 import { useMemo } from 'react';
 import { blackScholesPrice, computeGreeks, calcFee } from '@/lib/blackScholes';
-import { EXPIRY_TO_YEARS } from '@/lib/constants';
+import { expiryStringToYears } from '@/lib/constants';
 import type { Side, Expiry, Greeks } from '@/types';
 
 export function useBlackScholes(
@@ -13,7 +13,7 @@ export function useBlackScholes(
   size: number
 ) {
   return useMemo(() => {
-    const T = EXPIRY_TO_YEARS[expiry];
+    const T = expiryStringToYears(expiry);
     const premium = blackScholesPrice(S, K, T, sigma, 0, side);
     const greeks: Greeks = computeGreeks(S, K, T, sigma, 0, side, size);
     const totalPremium = premium * size;
