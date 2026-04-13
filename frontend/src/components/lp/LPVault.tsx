@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey, Connection } from '@solana/web3.js';
+import { useEffectiveWallet } from '@/hooks/useEffectiveWallet';
 import { getAssociatedTokenAddress } from '@solana/spl-token';
 import { useVaultStats } from '@/hooks/useVaultStats';
 import { PacificaOptionsClient, findVaultPDA, findVlpMintPDA } from '@/lib/anchor_client';
@@ -40,8 +41,7 @@ function StatCard({ label, value, sub, accent }: {
 }
 
 export function LPVault() {
-  const { publicKey, ...walletRest } = useWallet();
-  const wallet = useWallet();
+  const { publicKey, wallet } = useEffectiveWallet();
   const stats  = useVaultStats();
   const { isMobile } = useBreakpoint();
 

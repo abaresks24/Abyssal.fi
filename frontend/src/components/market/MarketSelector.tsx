@@ -63,7 +63,7 @@ function MarketRow({ market }: { market: Market }) {
         )}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
-        <span className="mono" style={{ fontSize: 11, color: 'var(--text)' }}>
+        <span className="mono price-update" style={{ fontSize: 11, color: 'var(--text)' }}>
           {price > 0 ? `$${fmt(price, market)}` : '—'}
         </span>
         {price > 0 && (

@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useEffectiveWallet } from '@/hooks/useEffectiveWallet';
 import type { Market, Side } from '@/types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -329,7 +329,7 @@ type FilterSide   = Side   | 'All';
 type FilterType   = ListingType | 'All';
 
 export function Marketplace() {
-  const { publicKey } = useWallet();
+  const { publicKey } = useEffectiveWallet();
   const [filterMarket, setFilterMarket] = useState<FilterMarket>('All');
   const [filterSide,   setFilterSide]   = useState<FilterSide>('All');
   const [filterType,   setFilterType]   = useState<FilterType>('All');

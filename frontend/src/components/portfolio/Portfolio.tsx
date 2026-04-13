@@ -1,8 +1,8 @@
 'use client';
 import React, { useState } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { usePositions } from '@/hooks/usePositions';
+import { useEffectiveWallet } from '@/hooks/useEffectiveWallet';
 import { solscanAccount } from '@/lib/constants';
 import type { Market, Side, OptionPositionAccount } from '@/types';
 
@@ -68,7 +68,7 @@ function ActionBtn({ label, color, onClick }: { label: string; color: string; on
 type Filter = 'open' | 'history';
 
 export function Portfolio() {
-  const { publicKey } = useWallet();
+  const { publicKey } = useEffectiveWallet();
   const { isMobile } = useBreakpoint();
   const [filter, setFilter] = useState<Filter>('open');
 

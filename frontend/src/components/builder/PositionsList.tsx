@@ -1,7 +1,7 @@
 'use client';
 import React from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
 import { usePositions } from '@/hooks/usePositions';
+import { useEffectiveWallet } from '@/hooks/useEffectiveWallet';
 import { solscanAccount } from '@/lib/constants';
 
 const SOLSCAN = solscanAccount;
@@ -15,7 +15,7 @@ function fmtExpiry(d: Date) {
 }
 
 export const PositionsList = React.memo(function PositionsList() {
-  const { publicKey } = useWallet();
+  const { publicKey } = useEffectiveWallet();
   const { positions, loading, refetch } = usePositions(publicKey);
 
   const open = positions.filter(p => p.status === 'open');

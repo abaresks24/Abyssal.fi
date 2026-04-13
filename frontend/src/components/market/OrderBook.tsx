@@ -29,24 +29,23 @@ function Row({ level, side, maxTotal }: { level: BookLevel; side: 'bid' | 'ask';
       position: 'relative',
       display: 'flex',
       justifyContent: 'space-between',
-      padding: '2.5px 8px',
+      padding: '3px 8px',
       fontSize: 11,
       fontFamily: 'monospace',
       cursor: 'default',
-      transition: 'background 0.1s',
     }}>
-      {/* Depth bar with gradient fade */}
+      {/* Depth bar — more visible */}
       <div style={{
         position: 'absolute',
         right: 0, top: 0, bottom: 0,
         width: `${pct}%`,
-        background: `linear-gradient(${isBid ? '90deg' : '270deg'}, rgba(${bgRaw},0.18), rgba(${bgRaw},0.04))`,
+        background: `linear-gradient(${isBid ? '90deg' : '270deg'}, rgba(${bgRaw},0.30), rgba(${bgRaw},0.08))`,
         pointerEvents: 'none',
         transition: 'width 0.3s ease',
       }} />
-      <span style={{ color, zIndex: 1, minWidth: 70, fontWeight: 600 }}>{priceFmt(level.price)}</span>
-      <span style={{ color: 'rgba(255,255,255,0.7)', zIndex: 1 }}>{sizeFmt(level.size)}</span>
-      <span style={{ color: 'rgba(255,255,255,0.35)', zIndex: 1, minWidth: 54, textAlign: 'right' }}>
+      <span style={{ color, zIndex: 1, minWidth: 70, fontWeight: 700, fontSize: 11.5 }}>{priceFmt(level.price)}</span>
+      <span style={{ color: 'var(--text)', zIndex: 1, opacity: 0.8 }}>{sizeFmt(level.size)}</span>
+      <span style={{ color: 'var(--text2)', zIndex: 1, minWidth: 54, textAlign: 'right' }}>
         {sizeFmt(level.total)}
       </span>
     </div>
@@ -110,16 +109,16 @@ export function OrderBook() {
 
           {/* Mid + spread — the hero row */}
           <div style={{
-            padding: '6px 10px',
-            borderTop: '1px solid rgba(255,255,255,0.04)',
-            borderBottom: '1px solid rgba(255,255,255,0.04)',
+            padding: '7px 10px',
+            borderTop: '1px solid rgba(85,195,233,0.12)',
+            borderBottom: '1px solid rgba(85,195,233,0.12)',
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             flexShrink: 0,
-            background: 'linear-gradient(90deg, rgba(85,195,233,0.04), transparent)',
+            background: 'linear-gradient(90deg, rgba(85,195,233,0.08), rgba(85,195,233,0.02))',
           }}>
             <span style={{
-              color: 'var(--cyan)', fontFamily: 'monospace', fontWeight: 700, fontSize: 14,
-              textShadow: '0 0 12px rgba(85,195,233,0.2)',
+              color: 'var(--cyan)', fontFamily: 'monospace', fontWeight: 700, fontSize: 15,
+              textShadow: '0 0 16px rgba(85,195,233,0.3)',
               letterSpacing: '-0.01em',
             }}>
               {mid > 0 ? priceFmt(mid) : '—'}

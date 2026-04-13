@@ -1,6 +1,6 @@
 'use client';
 import React, { useState } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useEffectiveWallet } from '@/hooks/useEffectiveWallet';
 import type { Side, Action } from '@/types';
 
 interface Props {
@@ -13,7 +13,7 @@ interface Props {
 }
 
 export const BuyButton = React.memo(function BuyButton({ side, action, totalCost, netReceive, disabled, onBuy }: Props) {
-  const { publicKey } = useWallet();
+  const { publicKey } = useEffectiveWallet();
   const [hover, setHover] = useState(false);
 
   const isSell    = action === 'sell';
