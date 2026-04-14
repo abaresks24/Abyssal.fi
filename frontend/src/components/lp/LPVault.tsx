@@ -57,18 +57,44 @@ export function LPVault() {
 
   const { totalCollateral, totalVlpTokens, openInterest, feesCollected, loading: statsLoading } = stats;
   const vlpPrice      = totalVlpTokens > 0 ? totalCollateral / totalVlpTokens : 1;
-  const userValueUsdc = vlpBalance * vlpPrice;
   const utilization   = totalCollateral > 0 ? (openInterest / totalCollateral) * 100 : 0;
 
-  // ── Dynamic APY & safety factor ─────────────────────────────────────────────
-  // Safety factor: the higher the utilization, the more conservative the yield
-  const safetyFactor = utilization > 95 ? 0 : utilization > 80 ? 0.70 : utilization > 50 ? 0.85 : 0.95;
-  // Annualized yield from fees (assume fees accumulated over ~30 days for estimation)
-  const rawApy = totalCollateral > 0 ? (feesCollected / totalCollateral) * 12 * 100 : 0; // monthly × 12
-  const displayApy = rawApy * safetyFactor;
-  // Withdrawal allowed only if vault keeps 120% coverage of open interest
-  const availableForWithdraw = Math.max(0, totalCollateral - openInterest * 1.2);
+  // ── Dynamic APY ────────────────────────────────────────────────────────────
+  // Base APY from fees (annualized)
+  const rawApy = totalCollateral > 0 ? (feesCollected / totalCollateral) * 12 * 100 : 0;
+  // APY increases with utilization to attract LPs when vault needs liquidity
+  const utilizationBoost = utilization > 80 ? 1.5 : utilization > 50 ? 1.2 : 1.0;
+  const displayApy = Math.max(rawApy * utilizationBoost, 0.5); // min 0.5% APY
+
+  // ── Yield accrual (per-hour) ───────────────────────────────────────────────
+  // User deposited X USDP → got vLP at entry price
+  // Their withdrawable = deposit + accrued yield (NOT full vault share)
+  // Accrued yield = deposit × APY × (hours since deposit) / 8760
+  const [depositedAmount, setDepositedAmount] = useState(0);
+  const [depositTimestamp, setDepositTimestamp] = useState(0);
+
+  // Read deposit info from localStorage (until we have on-chain tracking)
+  useEffect(() => {
+    if (!publicKey) return;
+    try {
+      const key = `abyssal_deposit_${publicKey.toBase58()}`;
+      const stored = JSON.parse(localStorage.getItem(key) ?? '{}');
+      if (stored.amount > 0) {
+        setDepositedAmount(stored.amount);
+        setDepositTimestamp(stored.timestamp);
+      }
+    } catch {}
+  }, [publicKey]);
+
+  const hoursElapsed = depositTimestamp > 0 ? Math.max(0, (Date.now() - depositTimestamp) / 3_600_000) : 0;
+  const accruedYield = depositedAmount * (displayApy / 100) * (hoursElapsed / 8760);
+  const maxWithdrawable = depositedAmount + accruedYield;
+  const userValueUsdc = vlpBalance * vlpPrice; // Full vault share (display only)
+
+  // Solvency: vault must keep 120% of open interest
+  const solvencyLimit = Math.max(0, totalCollateral - openInterest * 1.2);
   const withdrawBlocked = utilization > 95;
+  const effectiveMaxWithdraw = Math.min(maxWithdrawable, solvencyLimit);
 
   const vlpMintAddress = (() => {
     try {
@@ -128,8 +154,8 @@ export function LPVault() {
         setErr('Withdrawals paused — vault utilization > 95%. Wait for positions to settle.');
         return;
       }
-      if (val > availableForWithdraw) {
-        setErr(`Max withdrawable: $${fmt(availableForWithdraw)} USDP (120% OI coverage required).`);
+      if (val > effectiveMaxWithdraw) {
+        setErr(`Max withdrawable: $${fmt(effectiveMaxWithdraw)} (deposit + accrued yield at ${fmt(displayApy, 1)}% APY).`);
         return;
       }
     }
@@ -141,9 +167,28 @@ export function LPVault() {
         ? await client.depositVault({ vaultAuthority: authority, usdcAmount: val })
         : await client.withdrawVault({ vaultAuthority: authority, vlpTokens: vlpPrice > 0 ? val / vlpPrice : 0 });
       setTxSig(sig);
+
+      // Track deposit/withdraw for yield accrual
+      if (publicKey) {
+        const key = `abyssal_deposit_${publicKey.toBase58()}`;
+        if (tab === 'deposit') {
+          const prev = JSON.parse(localStorage.getItem(key) ?? '{}');
+          const newAmount = (prev.amount ?? 0) + val;
+          const ts = prev.timestamp ?? Date.now();
+          localStorage.setItem(key, JSON.stringify({ amount: newAmount, timestamp: ts }));
+          setDepositedAmount(newAmount);
+          if (!depositTimestamp) setDepositTimestamp(ts);
+        } else {
+          // Subtract from tracked deposit
+          const prev = JSON.parse(localStorage.getItem(key) ?? '{}');
+          const newAmount = Math.max(0, (prev.amount ?? 0) - val);
+          localStorage.setItem(key, JSON.stringify({ amount: newAmount, timestamp: prev.timestamp ?? Date.now() }));
+          setDepositedAmount(newAmount);
+        }
+      }
+
       setAmount('');
       await fetchBalances();
-      // Re-fetch after 2 s in case the RPC node hasn't propagated the balance yet
       setTimeout(() => fetchBalances(), 2000);
     } catch (e: any) {
       const msg: string = e?.message ?? 'Transaction failed';
@@ -182,10 +227,36 @@ export function LPVault() {
       {/* Stats */}
       <div className="cards-row" style={{ display: 'flex', gap: 12 }}>
         <StatCard label="Total Value Locked" value={statsLoading ? '—' : `$${fmt(totalCollateral)}`} sub="USDP in vault" />
-        <StatCard label="Est. APY"           value={statsLoading ? '—' : `${fmt(displayApy, 1)}%`}  sub={`Safety: ${(safetyFactor * 100).toFixed(0)}%`} accent="var(--green)" />
-        <StatCard label="Utilization"        value={statsLoading ? '—' : `${fmt(utilization, 1)}%`} sub={`Available: $${fmt(availableForWithdraw)}`} accent={utilization > 80 ? 'var(--amber)' : utilization > 50 ? 'var(--cyan)' : undefined} />
-        <StatCard label="Fees Collected"     value={statsLoading ? '—' : `$${fmt(feesCollected)}`}  sub={`vLP price: $${fmt(vlpPrice, 4)}`} accent="var(--cyan)" />
+        <StatCard label="APY"                value={statsLoading ? '—' : `${fmt(displayApy, 1)}%`}  sub={utilization > 50 ? `${fmt(utilizationBoost, 1)}x boost` : 'Base rate'} accent="var(--green)" />
+        <StatCard label="Utilization"        value={statsLoading ? '—' : `${fmt(utilization, 1)}%`} sub={`OI: $${fmt(openInterest)}`} accent={utilization > 80 ? 'var(--amber)' : utilization > 50 ? 'var(--cyan)' : undefined} />
+        <StatCard label="Fees Collected"     value={statsLoading ? '—' : `$${fmt(feesCollected)}`}  sub={`vLP: $${fmt(vlpPrice, 4)}`} accent="var(--cyan)" />
       </div>
+
+      {/* Your yield accrual */}
+      {publicKey && depositedAmount > 0 && (
+        <div style={{
+          background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10,
+          padding: '14px 18px', position: 'relative', overflow: 'hidden',
+        }}>
+          <div style={{ position: 'absolute', top: 0, left: '10%', right: '10%', height: 1, background: 'linear-gradient(90deg, transparent, var(--green), transparent)', opacity: 0.3 }} />
+          <div style={{ fontSize: 10, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, fontWeight: 500 }}>Your Yield Accrual</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 2 }}>Deposited</div>
+              <div style={{ fontSize: 16, fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--text)' }}>${fmt(depositedAmount)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 2 }}>Accrued Yield</div>
+              <div style={{ fontSize: 16, fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--green)' }}>+${fmt(accruedYield, 4)}</div>
+              <div style={{ fontSize: 9, color: 'var(--text3)' }}>{fmt(hoursElapsed, 1)}h × {fmt(displayApy, 1)}% APY</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 2 }}>Withdrawable</div>
+              <div style={{ fontSize: 16, fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--cyan)' }}>${fmt(effectiveMaxWithdraw, 4)}</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Utilization warning */}
       {utilization > 80 && (
