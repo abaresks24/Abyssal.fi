@@ -34,13 +34,21 @@ const DEFAULT_IV: Record<string, number> = {
   BTC: 0.55, ETH: 0.60, SOL: 0.70,
 };
 
-// Simple mock prices for non-crypto markets
-const MOCK_PRICES: Record<string, number> = {
+// Fallback prices (used when CoinGecko is rate-limited)
+const FALLBACK_PRICES: Record<string, number> = {
+  BTC: 75000, ETH: 2400, SOL: 87,
   NVDA: 105, TSLA: 245, PLTR: 24, CRCL: 32, HOOD: 22, SP500: 5200,
   XAU: 2350, XAG: 28, PAXG: 2350, PLATINUM: 950, NATGAS: 3.5, COPPER: 4.2,
 };
 
+// Cache prices for 30s to avoid CoinGecko rate limits
+const priceCache: Record<string, { price: number; ts: number }> = {};
+
 function fetchCoinGeckoPrice(id: string): Promise<number> {
+  const cached = priceCache[id];
+  if (cached && Date.now() - cached.ts < 30_000) {
+    return Promise.resolve(cached.price);
+  }
   return new Promise((resolve, reject) => {
     const url = `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`;
     https.get(url, (res) => {
@@ -49,7 +57,13 @@ function fetchCoinGeckoPrice(id: string): Promise<number> {
       res.on('end', () => {
         try {
           const json = JSON.parse(data);
-          resolve(json[id]?.usd ?? 0);
+          const p = json[id]?.usd;
+          if (p && p > 0) {
+            priceCache[id] = { price: p, ts: Date.now() };
+            resolve(p);
+          } else {
+            reject(new Error('No price in response'));
+          }
         } catch { reject(new Error('CoinGecko parse error')); }
       });
     }).on('error', reject);
@@ -74,21 +88,24 @@ export async function POST(req: NextRequest) {
     const keeper = loadKeypair('KEEPER_KEYPAIR');
     const connection = new Connection(SOLANA_RPC, 'confirmed');
 
-    // Fetch price
+    // Fetch price — CoinGecko with fallback to hardcoded prices
     let price: number;
+    let priceSource = 'fallback';
     const cgId = COINGECKO_IDS[market];
     if (cgId) {
       try {
         price = await fetchCoinGeckoPrice(cgId);
+        priceSource = 'coingecko';
       } catch {
-        price = MOCK_PRICES[market] ?? 0;
+        price = FALLBACK_PRICES[market] ?? 0;
+        priceSource = 'fallback';
       }
     } else {
-      price = MOCK_PRICES[market] ?? 0;
+      price = FALLBACK_PRICES[market] ?? 0;
     }
 
     if (price <= 0) {
-      return NextResponse.json({ error: 'Could not fetch price' }, { status: 500 });
+      return NextResponse.json({ error: 'Could not fetch price for ' + market }, { status: 500 });
     }
 
     const iv = DEFAULT_IV[market] ?? 0.50;
@@ -130,6 +147,7 @@ export async function POST(req: NextRequest) {
       success: true,
       market,
       price,
+      priceSource,
       iv,
       signature: sig,
     });
