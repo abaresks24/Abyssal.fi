@@ -60,6 +60,16 @@ export function LPVault() {
   const userValueUsdc = vlpBalance * vlpPrice;
   const utilization   = totalCollateral > 0 ? (openInterest / totalCollateral) * 100 : 0;
 
+  // ── Dynamic APY & safety factor ─────────────────────────────────────────────
+  // Safety factor: the higher the utilization, the more conservative the yield
+  const safetyFactor = utilization > 95 ? 0 : utilization > 80 ? 0.70 : utilization > 50 ? 0.85 : 0.95;
+  // Annualized yield from fees (assume fees accumulated over ~30 days for estimation)
+  const rawApy = totalCollateral > 0 ? (feesCollected / totalCollateral) * 12 * 100 : 0; // monthly × 12
+  const displayApy = rawApy * safetyFactor;
+  // Withdrawal allowed only if vault keeps 120% coverage of open interest
+  const availableForWithdraw = Math.max(0, totalCollateral - openInterest * 1.2);
+  const withdrawBlocked = utilization > 95;
+
   const vlpMintAddress = (() => {
     try {
       const [vault] = findVaultPDA(new PublicKey(VAULT_AUTHORITY));
@@ -113,6 +123,16 @@ export function LPVault() {
       setErr(`Insufficient USDP. You have ${fmt(usdpBalance)} USDP.`);
       return;
     }
+    if (tab === 'withdraw') {
+      if (withdrawBlocked) {
+        setErr('Withdrawals paused — vault utilization > 95%. Wait for positions to settle.');
+        return;
+      }
+      if (val > availableForWithdraw) {
+        setErr(`Max withdrawable: $${fmt(availableForWithdraw)} USDP (120% OI coverage required).`);
+        return;
+      }
+    }
     setLoading(true); setErr(null); setTxSig(null);
     try {
       const client    = new PacificaOptionsClient(walletForClient as any);
@@ -162,10 +182,24 @@ export function LPVault() {
       {/* Stats */}
       <div className="cards-row" style={{ display: 'flex', gap: 12 }}>
         <StatCard label="Total Value Locked" value={statsLoading ? '—' : `$${fmt(totalCollateral)}`} sub="USDP in vault" />
-        <StatCard label="vLP Token Price"    value={statsLoading ? '—' : `$${fmt(vlpPrice, 4)}`}    sub="USDP per vLP" accent="var(--cyan)" />
-        <StatCard label="Utilization"        value={statsLoading ? '—' : `${fmt(utilization, 1)}%`} sub="Open interest / TVL" accent={utilization > 80 ? 'var(--amber)' : undefined} />
-        <StatCard label="Fees Collected"     value={statsLoading ? '—' : `$${fmt(feesCollected)}`}  sub="Cumulative" accent="var(--green)" />
+        <StatCard label="Est. APY"           value={statsLoading ? '—' : `${fmt(displayApy, 1)}%`}  sub={`Safety: ${(safetyFactor * 100).toFixed(0)}%`} accent="var(--green)" />
+        <StatCard label="Utilization"        value={statsLoading ? '—' : `${fmt(utilization, 1)}%`} sub={`Available: $${fmt(availableForWithdraw)}`} accent={utilization > 80 ? 'var(--amber)' : utilization > 50 ? 'var(--cyan)' : undefined} />
+        <StatCard label="Fees Collected"     value={statsLoading ? '—' : `$${fmt(feesCollected)}`}  sub={`vLP price: $${fmt(vlpPrice, 4)}`} accent="var(--cyan)" />
       </div>
+
+      {/* Utilization warning */}
+      {utilization > 80 && (
+        <div style={{
+          padding: '8px 14px', borderRadius: 6, fontSize: 12, lineHeight: 1.5,
+          background: utilization > 95 ? 'var(--red-dim)' : 'var(--amber-dim)',
+          border: `1px solid ${utilization > 95 ? 'rgba(235,54,90,0.2)' : 'rgba(236,202,90,0.2)'}`,
+          color: utilization > 95 ? 'var(--red)' : 'var(--amber)',
+        }}>
+          {utilization > 95
+            ? 'Vault utilization > 95% — withdrawals temporarily paused to protect open positions.'
+            : 'High utilization — withdrawal yield reduced to maintain vault solvency.'}
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexDirection: isMobile ? 'column' : 'row' }}>
 
