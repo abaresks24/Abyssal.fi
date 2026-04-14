@@ -17,7 +17,8 @@ const PROGRAM_ID  = new PublicKey('CBkvR8SeN6j8RQKB7dSxG3dza2v71XHmWEe8LgfMW1hG'
 const VAULT_AUTH  = new PublicKey('AHWUeGsXbx9gd46SBS5SQK4rfQ8rGb1wWAzvZtJ6zdRg');
 const SCALE       = 1_000_000;
 
-const PACIFICA_API = process.env.NEXT_PUBLIC_PACIFICA_API_URL || 'https://api.pacifica.fi/api';
+// Direct URL — server-side routes can't use the /api/pacifica proxy
+const PACIFICA_API = 'https://api.pacifica.fi/api';
 
 const MARKET_DISC: Record<string, number> = {
   BTC: 0, ETH: 1, SOL: 2,
