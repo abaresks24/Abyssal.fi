@@ -51,7 +51,7 @@ export function TradeHistory() {
       const provider = new AnchorProvider(conn, dummy as any, { commitment: 'confirmed' });
       const program = new Program(IDL as any, provider);
 
-      const accounts = await program.account.optionPosition.all();
+      const accounts = await (program.account as any).optionPosition.all();
 
       const parsed: Trade[] = accounts
         .map(({ publicKey, account }: any) => {
