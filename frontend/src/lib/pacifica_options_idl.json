@@ -703,6 +703,47 @@
           "writable": true
         },
         {
+          "name": "lp_position",
+          "docs": [
+            "LP position tracker — created on first deposit, updated on each deposit/withdraw"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  108,
+                  112,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "depositor"
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
           "name": "depositor",
           "writable": true,
           "signer": true
@@ -3464,6 +3505,47 @@
           "writable": true
         },
         {
+          "name": "lp_position",
+          "docs": [
+            "LP position tracker — must exist (created on deposit)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  108,
+                  112,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "withdrawer"
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
           "name": "withdrawer",
           "writable": true,
           "signer": true
@@ -3753,6 +3835,19 @@
       ]
     },
     {
+      "name": "VaultLPPosition",
+      "discriminator": [
+        228,
+        199,
+        57,
+        86,
+        55,
+        163,
+        57,
+        196
+      ]
+    },
+    {
       "name": "WrittenPosition",
       "discriminator": [
         22,
@@ -4001,6 +4096,11 @@
       "code": 6043,
       "name": "InvalidVault",
       "msg": "Invalid vault reference on listing"
+    },
+    {
+      "code": 6044,
+      "name": "WithdrawExceedsYield",
+      "msg": "Withdrawal exceeds deposit + accrued yield"
     }
   ],
   "types": [
@@ -5251,6 +5351,73 @@
           {
             "name": "latest_price",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VaultLPPosition",
+      "docs": [
+        "Global vault LP position — tracks a user's vLP deposit, yield accrual, and withdrawal limits."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "vlp_tokens",
+            "docs": [
+              "vLP tokens held by this user"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "usdc_deposited",
+            "docs": [
+              "Cumulative USDC deposited (cost basis)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "First deposit timestamp"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "last_deposit_at",
+            "docs": [
+              "Last deposit timestamp (for time-lock)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "usdc_withdrawn",
+            "docs": [
+              "Cumulative USDC already withdrawn"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "_padding",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
           }
         ]
       }

@@ -808,6 +808,7 @@ export class PacificaOptionsClient {
     const usdcMint      = await this.getVaultUsdcMint(params.vaultAuthority);
     const depositorUsdc = await getAssociatedTokenAddress(usdcMint, depositor);
     const depositorVlp  = await getAssociatedTokenAddress(vlpMint, depositor);
+    const [lpPosition]  = findVaultLPPositionPDA(depositor, vault);
 
     console.log('[depositVault] vault:', vault.toBase58());
     console.log('[depositVault] vlpMint:', vlpMint.toBase58());
@@ -825,6 +826,7 @@ export class PacificaOptionsClient {
         vlpMint,
         depositorVlp,
         depositorUsdc,
+        lpPosition,
         depositor,
         tokenProgram:            TOKEN_PROGRAM_ID,
         associatedTokenProgram:  ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -848,6 +850,7 @@ export class PacificaOptionsClient {
     const usdcMint       = await this.getVaultUsdcMint(params.vaultAuthority);
     const withdrawerUsdc = await getAssociatedTokenAddress(usdcMint, withdrawer);
     const withdrawerVlp  = await getAssociatedTokenAddress(vlpMint, withdrawer);
+    const [lpPosition]   = findVaultLPPositionPDA(withdrawer, vault);
 
     return await this.program.methods
       .withdrawVault({
@@ -860,6 +863,7 @@ export class PacificaOptionsClient {
         vlpMint,
         withdrawerVlp,
         withdrawerUsdc,
+        lpPosition,
         withdrawer,
         tokenProgram:           TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,

@@ -3,6 +3,7 @@ use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, Burn, Mint, MintTo, SetAuthority, Token, TokenAccount, Transfer};
 use anchor_spl::token::spl_token::instruction::AuthorityType;
 use crate::state::vault::OptionVault;
+use crate::state::position::VaultLPPosition;
 use crate::error::OptionsError;
 
 // ── Initialize vLP Mint ───────────────────────────────────────────────────────
@@ -104,6 +105,16 @@ pub struct DepositVault<'info> {
     )]
     pub depositor_usdc: Box<Account<'info, TokenAccount>>,
 
+    /// LP position tracker — created on first deposit, updated on each deposit/withdraw
+    #[account(
+        init_if_needed,
+        payer = depositor,
+        space = VaultLPPosition::LEN,
+        seeds = [b"vault_lp_position", depositor.key().as_ref(), vault.key().as_ref()],
+        bump,
+    )]
+    pub lp_position: Box<Account<'info, VaultLPPosition>>,
+
     #[account(mut)]
     pub depositor: Signer<'info>,
 
@@ -169,7 +180,23 @@ pub fn deposit_vault(ctx: Context<DepositVault>, args: DepositVaultArgs) -> Resu
         vlp_tokens,
     )?;
 
-    // 3. Update vault totals
+    // 3. Update LP position tracker (before mutable vault borrow)
+    let clock = Clock::get()?;
+    let vault_key = ctx.accounts.vault.key();
+    {
+        let lp = &mut ctx.accounts.lp_position;
+        if lp.created_at == 0 {
+            lp.bump = ctx.bumps.lp_position;
+            lp.owner = ctx.accounts.depositor.key();
+            lp.vault = vault_key;
+            lp.created_at = clock.unix_timestamp;
+        }
+        lp.vlp_tokens = lp.vlp_tokens.checked_add(vlp_tokens).ok_or(OptionsError::MathOverflow)?;
+        lp.usdc_deposited = lp.usdc_deposited.checked_add(args.usdc_amount).ok_or(OptionsError::MathOverflow)?;
+        lp.last_deposit_at = clock.unix_timestamp;
+    }
+
+    // 4. Update vault totals
     let vault = &mut ctx.accounts.vault;
     vault.total_collateral = vault.total_collateral
         .checked_add(args.usdc_amount)
@@ -243,6 +270,15 @@ pub struct WithdrawVault<'info> {
         token::authority = withdrawer,
     )]
     pub withdrawer_usdc: Box<Account<'info, TokenAccount>>,
+
+    /// LP position tracker — must exist (created on deposit)
+    #[account(
+        mut,
+        seeds = [b"vault_lp_position", withdrawer.key().as_ref(), vault.key().as_ref()],
+        bump = lp_position.bump,
+        constraint = lp_position.owner == withdrawer.key() @ OptionsError::Unauthorized,
+    )]
+    pub lp_position: Box<Account<'info, VaultLPPosition>>,
 
     #[account(mut)]
     pub withdrawer: Signer<'info>,
@@ -353,6 +389,22 @@ pub fn withdraw_vault(ctx: Context<WithdrawVault>, args: WithdrawVaultArgs) -> R
         .ok_or(OptionsError::MathOverflow)? as u64;
     require!(remaining >= min_required, OptionsError::InsufficientCollateral);
 
+    // ── Yield accrual guard ──────────────────────────────────────────────────
+    // LP can only withdraw deposit + accrued yield, NOT the full vault share.
+    // APY = 100 bps base (1%) + utilization boost.
+    // This prevents infinite extraction from vault share appreciation.
+    let clock = Clock::get()?;
+    let utilization_pct = if vault.total_collateral > 0 {
+        vault.open_interest.saturating_mul(100) / vault.total_collateral
+    } else { 0 };
+    // APY in bps: 100 base + up to 200 extra at high utilization
+    let apy_bps = 100u64 + if utilization_pct > 80 { 200 } else if utilization_pct > 50 { 100 } else { 0 };
+    let max_withdraw = ctx.accounts.lp_position.max_withdrawable(clock.unix_timestamp, apy_bps);
+    require!(
+        usdc_out <= max_withdraw,
+        OptionsError::WithdrawExceedsYield
+    );
+
     // 1. Burn vLP tokens from withdrawer's ATA (withdrawer signs as token owner)
     token::burn(
         CpiContext::new(
@@ -389,9 +441,14 @@ pub fn withdraw_vault(ctx: Context<WithdrawVault>, args: WithdrawVaultArgs) -> R
     vault.total_collateral  = vault.total_collateral.saturating_sub(usdc_out);
     vault.total_vlp_tokens  = vault.total_vlp_tokens.saturating_sub(args.vlp_tokens);
 
+    // 4. Update LP position tracker
+    let lp = &mut ctx.accounts.lp_position;
+    lp.vlp_tokens = lp.vlp_tokens.saturating_sub(args.vlp_tokens);
+    lp.usdc_withdrawn = lp.usdc_withdrawn.saturating_add(usdc_out);
+
     msg!(
-        "Vault withdrawal: vlp_burned={} usdc_out={} remaining_collateral={}",
-        args.vlp_tokens, usdc_out, vault.total_collateral
+        "Vault withdrawal: vlp_burned={} usdc_out={} remaining_collateral={} lp_withdrawn={}",
+        args.vlp_tokens, usdc_out, vault.total_collateral, lp.usdc_withdrawn
     );
     Ok(())
 }

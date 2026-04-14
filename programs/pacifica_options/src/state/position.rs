@@ -119,7 +119,7 @@ impl LPPosition {
     pub const LEN: usize = 8 + 1 + 32 + 32 + 8 + 8 + 8 + 32;
 }
 
-/// Global vault LP position — tracks a user's vLP share tokens
+/// Global vault LP position — tracks a user's vLP deposit, yield accrual, and withdrawal limits.
 #[account]
 #[derive(Debug)]
 pub struct VaultLPPosition {
@@ -128,10 +128,15 @@ pub struct VaultLPPosition {
     pub vault: Pubkey,
     /// vLP tokens held by this user
     pub vlp_tokens: u64,
-    /// Cumulative USDC deposited (cost basis tracking)
+    /// Cumulative USDC deposited (cost basis)
     pub usdc_deposited: u64,
+    /// First deposit timestamp
     pub created_at: i64,
-    pub _padding: [u8; 32],
+    /// Last deposit timestamp (for time-lock)
+    pub last_deposit_at: i64,
+    /// Cumulative USDC already withdrawn
+    pub usdc_withdrawn: u64,
+    pub _padding: [u8; 16],
 }
 
 impl VaultLPPosition {
@@ -142,5 +147,20 @@ impl VaultLPPosition {
         + 8   // vlp_tokens
         + 8   // usdc_deposited
         + 8   // created_at
-        + 32; // padding
+        + 8   // last_deposit_at
+        + 8   // usdc_withdrawn
+        + 16; // padding
+
+    /// Max withdrawable = deposited + accrued yield - already withdrawn.
+    /// Yield = deposited × apy_bps/10000 × seconds_elapsed / SECONDS_PER_YEAR.
+    pub fn max_withdrawable(&self, now: i64, apy_bps: u64) -> u64 {
+        let elapsed = (now - self.created_at).max(0) as u128;
+        const YEAR_SECS: u128 = 365 * 24 * 3600;
+        let yield_earned = (self.usdc_deposited as u128)
+            .saturating_mul(apy_bps as u128)
+            .saturating_mul(elapsed)
+            / (10_000u128 * YEAR_SECS);
+        let total_entitlement = (self.usdc_deposited as u128).saturating_add(yield_earned);
+        total_entitlement.saturating_sub(self.usdc_withdrawn as u128) as u64
+    }
 }

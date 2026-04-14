@@ -144,4 +144,8 @@ pub enum OptionsError {
 
     #[msg("Invalid vault reference on listing")]
     InvalidVault,
+
+    // ── Vault Yield ──────────────────────────────────────────────────────────
+    #[msg("Withdrawal exceeds deposit + accrued yield")]
+    WithdrawExceedsYield,
 }
