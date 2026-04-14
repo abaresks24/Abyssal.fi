@@ -7,7 +7,8 @@ import { useAFVR } from '@/hooks/useAFVR';
 import { usePacificaWS } from '@/hooks/usePacificaWS';
 import { useSignerWallet } from '@/hooks/useSignerWallet';
 import { PacificaOptionsClient } from '@/lib/anchor_client';
-import { VAULT_AUTHORITY, expiryToDate, solscanTx } from '@/lib/constants';
+import { blackScholesPrice, calcFee } from '@/lib/blackScholes';
+import { VAULT_AUTHORITY, expiryToDate, expiryStringToYears, solscanTx } from '@/lib/constants';
 import { ActionToggle } from './ActionToggle';
 import { SideToggle } from './SideToggle';
 import { ExpirySelector } from '@/components/chain/ExpirySelector';
@@ -63,10 +64,20 @@ export function OptionBuilder() {
       console.log('[Keeper] Price updated:', keeperData.market, '$' + keeperData.price);
       setErr(null);
 
+      // Recalculate premium using the REAL price from keeper (not stale WS price)
+      const realSpot = keeperData.price as number;
+      const realIv   = keeperData.iv as number;
+      const T        = expiryStringToYears(expiry);
+      const realPremiumPerUnit = blackScholesPrice(realSpot, strike, T, realIv, 0, side);
+      const realTotalPremium   = realPremiumPerUnit * size;
+      const realFee            = calcFee(realPremiumPerUnit, size);
+      const maxPremiumUsdc     = (realTotalPremium + realFee) * 1.01; // 1% slippage
+
+      console.log('[Trade] spot=$' + realSpot, 'iv=' + realIv, 'premium=$' + realTotalPremium.toFixed(2), 'max=$' + maxPremiumUsdc.toFixed(2));
+
       const client    = new PacificaOptionsClient(walletForClient as any);
       const authority = new PublicKey(VAULT_AUTHORITY);
       const expiryTs  = Math.floor(expiryToDate(expiry).getTime() / 1000);
-      const slippage  = 2.0; // 100% tolerance — on-chain BS may differ from client-side estimate
 
       let sig: string;
       if (action === 'buy') {
@@ -77,7 +88,7 @@ export function OptionBuilder() {
           strikeUsdc:     strike,
           expiry:         expiryTs,
           sizeUnderlying: size,
-          maxPremiumUsdc: totalPremium * slippage,
+          maxPremiumUsdc,
         });
       } else {
         sig = await client.sellOption({
