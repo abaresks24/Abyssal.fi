@@ -1,18 +1,15 @@
 /**
- * Keeper endpoint — updates IV oracle prices for a given market.
+ * Keeper endpoint — updates IV oracle prices from Pacifica API.
  * Called before each trade to ensure the price feed is fresh (< 60s).
  *
  * POST /api/keeper
- * Body: { market: "BTC" | "ETH" | "SOL" }
+ * Body: { market: "BTC" | "ETH" | "SOL" | ... }
  *
- * Uses the KEEPER_KEYPAIR env var (same as vault_authority.json / 6rCfb...).
+ * Uses KEEPER_KEYPAIR env var (vault_authority.json / 6rCfb...).
  */
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  Connection, Keypair, PublicKey,
-} from '@solana/web3.js';
+import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { Program, AnchorProvider, BN } from '@coral-xyz/anchor';
-import https from 'https';
 import IDL from '@/lib/pacifica_options_idl.json';
 
 const SOLANA_RPC  = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
@@ -20,54 +17,45 @@ const PROGRAM_ID  = new PublicKey('CBkvR8SeN6j8RQKB7dSxG3dza2v71XHmWEe8LgfMW1hG'
 const VAULT_AUTH  = new PublicKey('AHWUeGsXbx9gd46SBS5SQK4rfQ8rGb1wWAzvZtJ6zdRg');
 const SCALE       = 1_000_000;
 
+const PACIFICA_API = process.env.NEXT_PUBLIC_PACIFICA_API_URL || 'https://api.pacifica.fi/api';
+
 const MARKET_DISC: Record<string, number> = {
   BTC: 0, ETH: 1, SOL: 2,
   NVDA: 3, TSLA: 4, PLTR: 5, CRCL: 6, HOOD: 7, SP500: 8,
   XAU: 9, XAG: 10, PAXG: 11, PLATINUM: 12, NATGAS: 13, COPPER: 14,
 };
 
-const COINGECKO_IDS: Record<string, string> = {
-  BTC: 'bitcoin', ETH: 'ethereum', SOL: 'solana',
-};
-
 const DEFAULT_IV: Record<string, number> = {
   BTC: 0.55, ETH: 0.60, SOL: 0.70,
+  NVDA: 0.45, TSLA: 0.55, PLTR: 0.60, CRCL: 0.50, HOOD: 0.55, SP500: 0.20,
+  XAU: 0.15, XAG: 0.25, PAXG: 0.15, PLATINUM: 0.20, NATGAS: 0.40, COPPER: 0.25,
 };
 
-// Fallback prices (used when CoinGecko is rate-limited)
-const FALLBACK_PRICES: Record<string, number> = {
-  BTC: 75000, ETH: 2400, SOL: 87,
-  NVDA: 105, TSLA: 245, PLTR: 24, CRCL: 32, HOOD: 22, SP500: 5200,
-  XAU: 2350, XAG: 28, PAXG: 2350, PLATINUM: 950, NATGAS: 3.5, COPPER: 4.2,
-};
-
-// Cache prices for 30s to avoid CoinGecko rate limits
+// Cache: avoid spamming Pacifica + Solana on rapid retries
 const priceCache: Record<string, { price: number; ts: number }> = {};
+const CACHE_TTL = 30_000; // 30s
 
-function fetchCoinGeckoPrice(id: string): Promise<number> {
-  const cached = priceCache[id];
-  if (cached && Date.now() - cached.ts < 30_000) {
-    return Promise.resolve(cached.price);
+/** Fetch price from Pacifica REST API (mark price from latest 1m kline) */
+async function fetchPacificaPrice(market: string): Promise<number> {
+  const cached = priceCache[market];
+  if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.price;
+
+  const now = Date.now();
+  const url = `${PACIFICA_API}/v1/kline/mark?symbol=${market}&interval=1m&start_time=${now - 120_000}&end_time=${now}&limit=1`;
+
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Pacifica ${res.status}`);
+
+  const json = await res.json();
+  if (!json.success || !Array.isArray(json.data) || json.data.length === 0) {
+    throw new Error('No kline data from Pacifica');
   }
-  return new Promise((resolve, reject) => {
-    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`;
-    https.get(url, (res) => {
-      let data = '';
-      res.on('data', (d) => data += d);
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          const p = json[id]?.usd;
-          if (p && p > 0) {
-            priceCache[id] = { price: p, ts: Date.now() };
-            resolve(p);
-          } else {
-            reject(new Error('No price in response'));
-          }
-        } catch { reject(new Error('CoinGecko parse error')); }
-      });
-    }).on('error', reject);
-  });
+
+  const price = parseFloat(json.data[json.data.length - 1].c);
+  if (!price || price <= 0) throw new Error('Invalid price from Pacifica');
+
+  priceCache[market] = { price, ts: Date.now() };
+  return price;
 }
 
 function loadKeypair(envVar: string): Keypair {
@@ -88,24 +76,15 @@ export async function POST(req: NextRequest) {
     const keeper = loadKeypair('KEEPER_KEYPAIR');
     const connection = new Connection(SOLANA_RPC, 'confirmed');
 
-    // Fetch price — CoinGecko with fallback to hardcoded prices
+    // Fetch price from Pacifica
     let price: number;
-    let priceSource = 'fallback';
-    const cgId = COINGECKO_IDS[market];
-    if (cgId) {
-      try {
-        price = await fetchCoinGeckoPrice(cgId);
-        priceSource = 'coingecko';
-      } catch {
-        price = FALLBACK_PRICES[market] ?? 0;
-        priceSource = 'fallback';
-      }
-    } else {
-      price = FALLBACK_PRICES[market] ?? 0;
-    }
-
-    if (price <= 0) {
-      return NextResponse.json({ error: 'Could not fetch price for ' + market }, { status: 500 });
+    let priceSource = 'pacifica';
+    try {
+      price = await fetchPacificaPrice(market);
+    } catch (e: any) {
+      return NextResponse.json({
+        error: `Pacifica price fetch failed for ${market}: ${e.message}`,
+      }, { status: 502 });
     }
 
     const iv = DEFAULT_IV[market] ?? 0.50;
@@ -119,12 +98,10 @@ export async function POST(req: NextRequest) {
     const program = new Program(IDL as any, provider);
 
     const [vault] = PublicKey.findProgramAddressSync(
-      [Buffer.from('vault'), VAULT_AUTH.toBuffer()],
-      PROGRAM_ID,
+      [Buffer.from('vault'), VAULT_AUTH.toBuffer()], PROGRAM_ID,
     );
     const [oracle] = PublicKey.findProgramAddressSync(
-      [Buffer.from('iv_oracle'), vault.toBuffer(), Buffer.from([disc])],
-      PROGRAM_ID,
+      [Buffer.from('iv_oracle'), vault.toBuffer(), Buffer.from([disc])], PROGRAM_ID,
     );
 
     const sig = await program.methods
