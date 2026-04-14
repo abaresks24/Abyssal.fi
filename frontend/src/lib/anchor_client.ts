@@ -1006,6 +1006,93 @@ export class PacificaOptionsClient {
       .rpc();
   }
 
+  /** Write a custom option listing — locks collateral in escrow. */
+  async writeOptionListing(params: {
+    vaultAuthority: PublicKey;
+    market: Market;
+    optionType: OptionType;
+    strikeUsdc: number;
+    expiry: number;
+    sizeUnderlying: number;
+    askPriceUsdc: number;
+  }): Promise<string> {
+    if (!this.wallet.publicKey) throw new Error('Wallet not connected');
+    const writer = this.wallet.publicKey;
+    const marketDisc  = MARKET_DISCRIMINANTS[params.market];
+    const optTypeDisc = OPTION_TYPE_DISCRIMINANTS[params.optionType];
+    const strike      = new BN(Math.round(params.strikeUsdc * SCALE));
+    const expiry      = new BN(params.expiry);
+    const size        = new BN(Math.round(params.sizeUnderlying * SCALE));
+    const askPrice    = new BN(Math.round(params.askPriceUsdc * SCALE));
+    const nonce       = new BN(Date.now());
+
+    const [vault]      = findVaultPDA(params.vaultAuthority);
+    const [ivOracle]   = findIVOraclePDA(vault, marketDisc);
+    const [listing]    = PacificaOptionsClient.findListingPDA(writer, nonce);
+    const [escrowPda]  = PacificaOptionsClient.findEscrowPDA(listing);
+    const [escrowUsdc] = PacificaOptionsClient.findEscrowUsdcPDA(listing);
+    const usdcMint     = await this.getVaultUsdcMint(params.vaultAuthority);
+    const writerUsdc   = await getAssociatedTokenAddress(usdcMint, writer);
+
+    return await this.program.methods
+      .writeOptionListing({
+        marketDiscriminant: marketDisc,
+        optionType: optTypeDisc,
+        strike,
+        expiry,
+        size,
+        askPrice,
+        nonce,
+      })
+      .accounts({
+        vault,
+        ivOracle,
+        listing,
+        escrowPda,
+        usdcMint,
+        escrowUsdc,
+        writerUsdc,
+        writer,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        rent: SYSVAR_RENT_PUBKEY,
+      } as any)
+      .rpc();
+  }
+
+  /** Fill a written listing — pay premium, get WrittenPosition. */
+  async fillWrittenListing(params: {
+    vaultAuthority: PublicKey;
+    listingPubkey: PublicKey;
+    sellerPubkey: PublicKey;
+    nonce: number;
+  }): Promise<string> {
+    if (!this.wallet.publicKey) throw new Error('Wallet not connected');
+    const buyer = this.wallet.publicKey;
+
+    const [vault]   = findVaultPDA(params.vaultAuthority);
+    const [listing] = PacificaOptionsClient.findListingPDA(params.sellerPubkey, new BN(params.nonce));
+    const [writtenPosition] = PacificaOptionsClient.findWrittenPositionPDA(buyer, listing);
+    const usdcMint  = await this.getVaultUsdcMint(params.vaultAuthority);
+    const buyerUsdc = await getAssociatedTokenAddress(usdcMint, buyer);
+    const writerUsdc = await getAssociatedTokenAddress(usdcMint, params.sellerPubkey);
+
+    return await this.program.methods
+      .fillWrittenListing()
+      .accounts({
+        vault,
+        listing,
+        writtenPosition,
+        buyerUsdc,
+        writerUsdc,
+        buyer,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        rent: SYSVAR_RENT_PUBKEY,
+      } as any)
+      .rpc();
+  }
+
   /** Fetch all active listings from on-chain. */
   static async getActiveListings(): Promise<{
     pubkey: string;
