@@ -66,7 +66,7 @@ export function OptionBuilder() {
       const client    = new PacificaOptionsClient(walletForClient as any);
       const authority = new PublicKey(VAULT_AUTHORITY);
       const expiryTs  = Math.floor(expiryToDate(expiry).getTime() / 1000);
-      const slippage  = 1.05;
+      const slippage  = 2.0; // 100% tolerance — on-chain BS may differ from client-side estimate
 
       let sig: string;
       if (action === 'buy') {
