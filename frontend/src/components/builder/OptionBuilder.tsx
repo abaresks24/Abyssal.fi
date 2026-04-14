@@ -34,10 +34,8 @@ export function OptionBuilder() {
   const [loading, setLoading] = useState(false);
   const [txSig, setTxSig]     = useState<string | null>(null);
   const [err, setErr]          = useState<string | null>(null);
+  const [slippagePct, setSlippagePct] = useState(1); // 1% default
 
-  // Collateral for sell:
-  //   Sell Call → lock size × spot (underlying value in USDC)
-  //   Sell Put  → lock size × strike (USDC)
   const collateral = action === 'sell'
     ? (side === 'call' ? size * (spot > 0 ? spot : strike) : size * strike)
     : 0;
@@ -50,7 +48,7 @@ export function OptionBuilder() {
     setErr(null);
     setTxSig(null);
     try {
-      // Refresh oracle price before trade (must be < 60s old)
+      // 1. Refresh oracle price (must be < 60s old for on-chain check)
       setErr('Refreshing price feed…');
       const keeperRes = await fetch('/api/keeper', {
         method: 'POST',
@@ -61,19 +59,20 @@ export function OptionBuilder() {
       if (!keeperRes.ok) {
         throw new Error(`Price feed update failed: ${keeperData.error ?? 'unknown'}`);
       }
-      console.log('[Keeper] Price updated:', keeperData.market, '$' + keeperData.price);
       setErr(null);
 
-      // Recalculate premium using the REAL price from keeper (not stale WS price)
+      // 2. Recalculate premium with REAL price from keeper
       const realSpot = keeperData.price as number;
       const realIv   = keeperData.iv as number;
       const T        = expiryStringToYears(expiry);
       const realPremiumPerUnit = blackScholesPrice(realSpot, strike, T, realIv, 0, side);
       const realTotalPremium   = realPremiumPerUnit * size;
-      const realFee            = calcFee(realPremiumPerUnit, size);
-      const maxPremiumUsdc     = (realTotalPremium + realFee) * 1.01; // 1% slippage
+      const slippageMultiplier = 1 + (slippagePct / 100);
 
-      console.log('[Trade] spot=$' + realSpot, 'iv=' + realIv, 'premium=$' + realTotalPremium.toFixed(2), 'max=$' + maxPremiumUsdc.toFixed(2));
+      // maxPremium = premium * (1 + slippage%)
+      const maxPremiumUsdc = realTotalPremium * slippageMultiplier;
+
+      console.log(`[Trade] ${action} ${side} | spot=$${realSpot} iv=${realIv} | premium=$${realTotalPremium.toFixed(2)} | slippage=${slippagePct}% | max=$${maxPremiumUsdc.toFixed(2)}`);
 
       const client    = new PacificaOptionsClient(walletForClient as any);
       const authority = new PublicKey(VAULT_AUTHORITY);
@@ -91,6 +90,7 @@ export function OptionBuilder() {
           maxPremiumUsdc,
         });
       } else {
+        const minProceedsUsdc = realTotalPremium / slippageMultiplier;
         sig = await client.sellOption({
           vaultAuthority: authority,
           market,
@@ -98,7 +98,7 @@ export function OptionBuilder() {
           strikeUsdc:      strike,
           expiry:          expiryTs,
           sizeUnderlying:  size,
-          minProceedsUsdc: netReceive / slippage,
+          minProceedsUsdc,
         });
       }
       setTxSig(sig);
@@ -107,7 +107,7 @@ export function OptionBuilder() {
     } finally {
       setLoading(false);
     }
-  }, [publicKey, signerReady, walletForClient, market, side, action, strike, expiry, size, totalPremium, netReceive]);
+  }, [publicKey, signerReady, walletForClient, market, side, action, strike, expiry, size, slippagePct]);
 
   return (
     <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -123,16 +123,10 @@ export function OptionBuilder() {
         </span>
       </div>
 
-      {/* Expiry */}
       <ExpirySelector />
-
-      {/* Buy / Sell */}
       <ActionToggle />
-
-      {/* Call / Put */}
       <SideToggle />
 
-      {/* Strike */}
       <div>
         <div style={{ fontSize: 10, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
           Strike
@@ -140,45 +134,62 @@ export function OptionBuilder() {
         <StrikeSelector spot={spot} />
       </div>
 
-      {/* Premium */}
       <PremiumDisplay premium={premium} totalPremium={totalPremium} side={side} />
-
-      {/* Payoff */}
       <PayoffChart strike={strike} premium={premium} size={size} side={side} currentSpot={spot} />
-
-      {/* Greeks */}
       <GreeksDisplay greeks={greeks} />
-
-      {/* Size */}
       <SizeInput spot={spot} />
 
-      {/* Order summary */}
+      {/* Slippage selector */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ fontSize: 10, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Slippage</span>
+        {[0.5, 1, 2, 5].map(pct => (
+          <button
+            key={pct}
+            onClick={() => setSlippagePct(pct)}
+            style={{
+              padding: '2px 7px', borderRadius: 4, fontSize: 11, fontFamily: 'var(--mono)',
+              border: `1px solid ${slippagePct === pct ? 'var(--cyan)' : 'var(--border2)'}`,
+              background: slippagePct === pct ? 'var(--cyan-dim)' : 'transparent',
+              color: slippagePct === pct ? 'var(--cyan)' : 'var(--text3)',
+              cursor: 'pointer',
+            }}
+          >
+            {pct}%
+          </button>
+        ))}
+        <input
+          type="number"
+          min={0.1}
+          max={50}
+          step={0.1}
+          value={slippagePct}
+          onChange={e => {
+            const v = parseFloat(e.target.value);
+            if (!isNaN(v) && v > 0 && v <= 50) setSlippagePct(v);
+          }}
+          style={{
+            width: 44, padding: '2px 4px', borderRadius: 4, fontSize: 11,
+            border: '1px solid var(--border2)', background: 'var(--bg3)',
+            color: 'var(--text)', fontFamily: 'var(--mono)', textAlign: 'center',
+          }}
+        />
+      </div>
+
       {strike > 0 && premium > 0 && (
         <OrderSummary
-          strike={strike}
-          expiry={expiry}
-          size={size}
-          market={market}
-          totalPremium={totalPremium}
-          fee={fee}
-          breakeven={breakeven}
-          side={side}
-          action={action}
-          spot={spot}
+          strike={strike} expiry={expiry} size={size} market={market}
+          totalPremium={totalPremium} fee={fee} breakeven={breakeven}
+          side={side} action={action} spot={spot}
         />
       )}
 
-      {/* CTA */}
       <BuyButton
-        side={side}
-        action={action}
-        totalCost={totalPremium + fee}
-        netReceive={netReceive}
+        side={side} action={action}
+        totalCost={totalPremium + fee} netReceive={netReceive}
         disabled={strike <= 0 || size <= 0 || loading}
         onBuy={handleConfirm}
       />
 
-      {/* Tx feedback */}
       {loading && (
         <div style={{ fontSize: 11, color: 'var(--text3)', textAlign: 'center' }}>
           Confirming transaction...
@@ -190,12 +201,8 @@ export function OptionBuilder() {
           background: 'rgba(2,199,123,0.08)', borderRadius: 4,
         }}>
           Confirmed ·{' '}
-          <a
-            href={solscanTx(txSig)}
-            target="_blank"
-            rel="noreferrer"
-            style={{ color: 'var(--cyan)', textDecoration: 'none' }}
-          >
+          <a href={solscanTx(txSig)} target="_blank" rel="noreferrer"
+            style={{ color: 'var(--cyan)', textDecoration: 'none' }}>
             View on Solscan
           </a>
         </div>
@@ -209,7 +216,6 @@ export function OptionBuilder() {
         </div>
       )}
 
-      {/* Positions */}
       <PositionsList />
     </div>
   );
