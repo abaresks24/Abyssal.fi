@@ -386,6 +386,17 @@ pub fn fix_open_interest(ctx: Context<FixOpenInterest>) -> Result<()> {
     Ok(())
 }
 
+// ── Admin: zero the fees_collected counter (one-shot reset) ─────────────────
+// Does NOT affect future fee accumulation — trades continue to add normally.
+// Use to wipe stale fees after reset_vault or cosmetic cleanup.
+
+pub fn zero_fees_collected(ctx: Context<FixOpenInterest>) -> Result<()> {
+    let vault = &mut ctx.accounts.vault;
+    vault.fees_collected = 0;
+    msg!("Vault fees_collected reset to zero");
+    Ok(())
+}
+
 pub fn withdraw_vault(ctx: Context<WithdrawVault>, args: WithdrawVaultArgs) -> Result<()> {
     require!(!ctx.accounts.vault.paused, OptionsError::ProtocolPaused);
     require!(args.vlp_tokens > 0, OptionsError::ZeroLpTokens);

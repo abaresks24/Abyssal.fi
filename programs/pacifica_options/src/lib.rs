@@ -218,6 +218,12 @@ pub mod pacifica_options {
         instructions::vault_liquidity::fix_open_interest(ctx)
     }
 
+    /// Zero the fees_collected counter (cosmetic/admin reset). Authority-only.
+    /// Does not affect future fee accumulation.
+    pub fn zero_fees_collected(ctx: Context<FixOpenInterest>) -> Result<()> {
+        instructions::vault_liquidity::zero_fees_collected(ctx)
+    }
+
     /// Close an OptionPosition PDA with size == 0 (orphan from failed buy).
     /// Reclaims rent to the owner.
     pub fn close_orphan_position(ctx: Context<CloseOrphanPosition>) -> Result<()> {

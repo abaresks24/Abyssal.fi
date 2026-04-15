@@ -356,11 +356,11 @@ export function LPVault() {
                     <span style={{ fontFamily: 'var(--mono)', fontWeight: 600, color: accent ?? 'var(--text)' }}>{value}</span>
                   </div>
                 ))}
-                {/* Orphan vLP (lost backing after reset) */}
-                {totalVlpTokens === 0 && vlpBalance > 0 && (
+                {/* Burn vLP helper — always available */}
+                {vlpBalance > 0 && (
                   <div style={{ marginTop: 12, padding: '8px 10px', background: 'rgba(236,202,90,0.08)', border: '1px solid var(--amber)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 11, color: 'var(--text2)' }}>
-                      These vLP lost their backing (vault reset). Burn to clean up.
+                      Clean up orphan / pre-reset vLP tokens.
                     </span>
                     <BurnVlpButton onDone={fetchBalances} />
                   </div>

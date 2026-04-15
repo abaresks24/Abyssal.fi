@@ -69,12 +69,20 @@ function MarketRow({ market }: { market: Market }) {
         )}
       </div>
       {isSelected && (
-        <span style={{
-          position: 'absolute', bottom: 0, left: 8, right: 8,
-          height: 2,
-          background: 'linear-gradient(90deg, transparent, var(--cyan), transparent)',
-          borderRadius: '2px 2px 0 0',
-        }} />
+        <>
+          <span style={{
+            position: 'absolute', top: 0, left: 8, right: 8,
+            height: 2,
+            background: 'linear-gradient(90deg, transparent, var(--cyan), transparent)',
+            borderRadius: '0 0 2px 2px',
+          }} />
+          <span style={{
+            position: 'absolute', bottom: 0, left: 8, right: 8,
+            height: 2,
+            background: 'linear-gradient(90deg, transparent, var(--cyan), transparent)',
+            borderRadius: '2px 2px 0 0',
+          }} />
+        </>
       )}
     </button>
   );
