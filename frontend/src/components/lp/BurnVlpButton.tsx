@@ -32,8 +32,13 @@ export function BurnVlpButton({ onDone }: { onDone?: () => void }) {
       tx.feePayer = publicKey;
       tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
       const signed = await walletForClient.signTransaction!(tx);
-      const sig = await conn.sendRawTransaction(signed.serialize());
-      await conn.confirmTransaction(sig, 'confirmed');
+      try {
+        const sig = await conn.sendRawTransaction(signed.serialize(), { skipPreflight: true });
+        await conn.confirmTransaction(sig, 'confirmed');
+      } catch (sendErr: any) {
+        // "already processed" means the wallet RPC submitted it first — treat as success
+        if (!/already (been )?processed/i.test(sendErr?.message ?? '')) throw sendErr;
+      }
       onDone?.();
     } catch (e: any) {
       setErr(e?.message ?? 'Burn failed');
