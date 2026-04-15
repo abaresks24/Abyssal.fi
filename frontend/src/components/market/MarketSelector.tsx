@@ -32,35 +32,27 @@ function MarketRow({ market }: { market: Market }) {
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
+        position: 'relative',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         width: '100%',
         padding: '8px 12px',
-        background: isSelected
-          ? 'rgba(85,195,233,0.08)'
-          : (hover ? 'rgba(255,255,255,0.02)' : 'transparent'),
+        background: 'transparent',
         border: 'none',
-        borderLeft: `2px solid ${isSelected ? 'var(--cyan)' : 'transparent'}`,
         cursor: 'pointer',
-        transition: 'all 0.15s ease',
+        transition: 'color 0.15s',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{
-          fontWeight: 700, fontSize: 12,
-          color: isSelected ? 'var(--cyan)' : (hover ? 'var(--text)' : 'var(--text)'),
-          letterSpacing: '0.02em',
+          fontWeight: isSelected ? 700 : 500, fontSize: 12,
+          color: isSelected ? 'var(--text)' : (hover ? 'var(--text2)' : 'var(--text3)'),
+          letterSpacing: isSelected ? '-0.01em' : '0.02em',
+          transition: 'color 0.15s',
         }}>
           {market}
         </span>
-        {isSelected && (
-          <div style={{
-            width: 4, height: 4, borderRadius: '50%',
-            background: 'var(--cyan)',
-            boxShadow: '0 0 6px var(--cyan-glow)',
-          }} />
-        )}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
         <span className="mono price-update" style={{ fontSize: 11, color: 'var(--text)' }}>
@@ -76,6 +68,14 @@ function MarketRow({ market }: { market: Market }) {
           </span>
         )}
       </div>
+      {isSelected && (
+        <span style={{
+          position: 'absolute', bottom: 0, left: 8, right: 8,
+          height: 2,
+          background: 'linear-gradient(90deg, transparent, var(--cyan), transparent)',
+          borderRadius: '2px 2px 0 0',
+        }} />
+      )}
     </button>
   );
 }
