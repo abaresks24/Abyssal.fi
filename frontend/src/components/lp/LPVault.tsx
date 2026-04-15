@@ -8,6 +8,7 @@ import { useVaultStats } from '@/hooks/useVaultStats';
 import { PacificaOptionsClient, findVaultPDA, findVlpMintPDA } from '@/lib/anchor_client';
 import { VAULT_AUTHORITY, SOLANA_RPC, solscanTx, solscanToken } from '@/lib/constants';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { BurnVlpButton } from './BurnVlpButton';
 
 function fmt(n: number, d = 2) {
   return n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -55,7 +56,9 @@ export function LPVault() {
   const [balLoading, setBalLoading] = useState(false);
   const [usdpBalance,setUsdpBalance]= useState<number | null>(null);
 
-  const { totalCollateral, totalVlpTokens, openInterest, feesCollected, loading: statsLoading } = stats;
+  const { totalCollateral, totalVlpTokens, openInterest, feesCollected: rawFees, loading: statsLoading } = stats;
+  // Hide stale fees when vault is effectively empty (post-reset state)
+  const feesCollected = (totalCollateral === 0 && totalVlpTokens === 0) ? 0 : rawFees;
   const vlpPrice      = totalVlpTokens > 0 ? totalCollateral / totalVlpTokens : 1;
   const utilization   = totalCollateral > 0 ? (openInterest / totalCollateral) * 100 : 0;
 
@@ -366,16 +369,27 @@ export function LPVault() {
             ) : vlpBalance === 0 ? (
               <div style={{ fontSize: 12, color: 'var(--text3)' }}>No position yet. Deposit USDP to get started.</div>
             ) : (
-              [
-                { label: 'vLP Balance',   value: `${fmt(vlpBalance, 4)} vLP`, accent: 'var(--cyan)' as string | undefined },
-                { label: 'Current Value', value: `$${fmt(userValueUsdc)}`,     accent: undefined },
-                { label: 'Share of Vault',value: totalVlpTokens > 0 ? `${fmt((vlpBalance / totalVlpTokens) * 100, 4)}%` : '—', accent: undefined },
-              ].map(({ label, value, accent }) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
-                  <span style={{ color: 'var(--text3)' }}>{label}</span>
-                  <span style={{ fontFamily: 'var(--mono)', fontWeight: 600, color: accent ?? 'var(--text)' }}>{value}</span>
-                </div>
-              ))
+              <>
+                {[
+                  { label: 'vLP Balance',   value: `${fmt(vlpBalance, 4)} vLP`, accent: 'var(--cyan)' as string | undefined },
+                  { label: 'Current Value', value: `$${fmt(userValueUsdc)}`,     accent: undefined },
+                  { label: 'Share of Vault',value: totalVlpTokens > 0 ? `${fmt((vlpBalance / totalVlpTokens) * 100, 4)}%` : '—', accent: undefined },
+                ].map(({ label, value, accent }) => (
+                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
+                    <span style={{ color: 'var(--text3)' }}>{label}</span>
+                    <span style={{ fontFamily: 'var(--mono)', fontWeight: 600, color: accent ?? 'var(--text)' }}>{value}</span>
+                  </div>
+                ))}
+                {/* Orphan vLP (lost backing after reset) */}
+                {totalVlpTokens === 0 && vlpBalance > 0 && (
+                  <div style={{ marginTop: 12, padding: '8px 10px', background: 'rgba(236,202,90,0.08)', border: '1px solid var(--amber)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 11, color: 'var(--text2)' }}>
+                      These vLP lost their backing (vault reset). Burn to clean up.
+                    </span>
+                    <BurnVlpButton onDone={fetchBalances} />
+                  </div>
+                )}
+              </>
             )}
           </div>
 
