@@ -8,16 +8,17 @@ const PRESETS = EXPIRY_OPTIONS;
 export function ExpirySelector() {
   const { expiry, setExpiry } = useOptionBuilder();
   const [customOpen, setCustomOpen] = useState(false);
-  const [customDays, setCustomDays] = useState('');
+  const [customVal, setCustomVal] = useState('');
+  const [customUnit, setCustomUnit] = useState<'M' | 'H' | 'D'>('D');
 
   const isCustom = !PRESETS.includes(expiry);
 
   const handleCustomSubmit = () => {
-    const days = parseInt(customDays, 10);
-    if (days > 0 && days <= 365) {
-      setExpiry(`${days}D`);
+    const val = parseInt(customVal, 10);
+    if (val > 0) {
+      setExpiry(`${val}${customUnit}`);
       setCustomOpen(false);
-      setCustomDays('');
+      setCustomVal('');
     }
   };
 
@@ -60,19 +61,31 @@ export function ExpirySelector() {
           <input
             type="number"
             min={1}
-            max={365}
-            value={customDays}
-            onChange={e => setCustomDays(e.target.value)}
+            value={customVal}
+            onChange={e => setCustomVal(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') handleCustomSubmit(); }}
-            placeholder="days"
+            placeholder="#"
             autoFocus
             style={{
-              width: 48, padding: '2px 6px', borderRadius: 4,
+              width: 42, padding: '2px 6px', borderRadius: 4,
               border: '1px solid var(--cyan)', background: 'var(--bg3)',
               color: 'var(--cyan)', fontSize: 11, fontFamily: 'var(--mono)',
               textAlign: 'center',
             }}
           />
+          <select
+            value={customUnit}
+            onChange={e => setCustomUnit(e.target.value as 'M' | 'H' | 'D')}
+            style={{
+              padding: '2px 4px', borderRadius: 4,
+              border: '1px solid var(--border2)', background: 'var(--bg3)',
+              color: 'var(--text)', fontSize: 11, fontFamily: 'var(--mono)',
+            }}
+          >
+            <option value="M">min</option>
+            <option value="H">hr</option>
+            <option value="D">day</option>
+          </select>
           <button
             onClick={handleCustomSubmit}
             style={{

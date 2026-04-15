@@ -1,9 +1,12 @@
 'use client';
 import React, { useState } from 'react';
+import { PublicKey } from '@solana/web3.js';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { usePositions } from '@/hooks/usePositions';
 import { useEffectiveWallet } from '@/hooks/useEffectiveWallet';
-import { solscanAccount } from '@/lib/constants';
+import { useSignerWallet } from '@/hooks/useSignerWallet';
+import { PacificaOptionsClient } from '@/lib/anchor_client';
+import { VAULT_AUTHORITY, solscanAccount, solscanTx } from '@/lib/constants';
 import type { Market, Side, OptionPositionAccount } from '@/types';
 
 function fmt(n: number, d = 2) {
@@ -69,10 +72,39 @@ type Filter = 'open' | 'history';
 
 export function Portfolio() {
   const { publicKey } = useEffectiveWallet();
+  const { walletForClient, ready: signerReady } = useSignerWallet();
   const { isMobile } = useBreakpoint();
   const [filter, setFilter] = useState<Filter>('open');
+  const [exerciseLoading, setExerciseLoading] = useState<string | null>(null);
+  const [exerciseTx, setExerciseTx] = useState<{ pubkey: string; sig: string } | null>(null);
+  const [exerciseErr, setExerciseErr] = useState<string | null>(null);
 
   const { positions, loading, refetch } = usePositions(publicKey);
+
+  const handleExercise = async (p: OptionPositionAccount) => {
+    if (!signerReady) { setExerciseErr('Wallet not ready'); return; }
+    setExerciseLoading(p.pubkey); setExerciseErr(null); setExerciseTx(null);
+    try {
+      // Refresh oracle first
+      await fetch('/api/keeper', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ market: p.market }),
+      });
+      const client = new PacificaOptionsClient(walletForClient as any);
+      const sig = await client.exerciseOption({
+        vaultAuthority: new PublicKey(VAULT_AUTHORITY),
+        market: p.market,
+        optionType: p.optionType,
+        strikeUsdc: p.strike,
+        expiry: Math.floor(p.expiry.getTime() / 1000),
+      });
+      setExerciseTx({ pubkey: p.pubkey, sig });
+      refetch();
+    } catch (e: any) {
+      setExerciseErr(e?.message ?? 'Exercise failed');
+    }
+    setExerciseLoading(null);
+  };
 
   const open    = positions.filter(p => p.status === 'open');
   const history = positions.filter(p => p.status !== 'open');
@@ -87,6 +119,20 @@ export function Portfolio() {
       padding: isMobile ? '16px' : '24px 28px',
       display: 'flex', flexDirection: 'column', gap: isMobile ? 14 : 20,
     }}>
+
+      {/* Exercise feedback */}
+      {exerciseTx && (
+        <div style={{ padding: '8px 14px', fontSize: 12, color: 'var(--green)', background: 'var(--green-dim)', borderRadius: 6 }}>
+          Exercised! <a href={solscanTx(exerciseTx.sig)} target="_blank" rel="noreferrer" style={{ color: 'var(--cyan)' }}>View on Solscan</a>
+          <button onClick={() => setExerciseTx(null)} style={{ marginLeft: 10, background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 10 }}>✕</button>
+        </div>
+      )}
+      {exerciseErr && (
+        <div style={{ padding: '8px 14px', fontSize: 12, color: 'var(--red)', background: 'var(--red-dim)', borderRadius: 6 }}>
+          {exerciseErr}
+          <button onClick={() => setExerciseErr(null)} style={{ marginLeft: 10, background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 10 }}>✕</button>
+        </div>
+      )}
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -190,7 +236,21 @@ export function Portfolio() {
                       : `$${fmt(p.payoffReceived)}`
                     }
                   </span>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4, alignItems: 'center' }}>
+                    {filter === 'open' && p.expiry.getTime() <= Date.now() && !p.settled && (
+                      <button
+                        onClick={() => handleExercise(p)}
+                        disabled={exerciseLoading === p.pubkey || !signerReady}
+                        style={{
+                          padding: '4px 10px', fontSize: 10, fontWeight: 700, borderRadius: 4,
+                          background: 'var(--cyan)', color: '#0a121c',
+                          border: 'none', cursor: 'pointer', letterSpacing: '0.05em',
+                          opacity: exerciseLoading === p.pubkey ? 0.5 : 1,
+                        }}
+                      >
+                        {exerciseLoading === p.pubkey ? '…' : 'EXERCISE'}
+                      </button>
+                    )}
                     <a
                       href={solscanAccount(p.pubkey)}
                       target="_blank"

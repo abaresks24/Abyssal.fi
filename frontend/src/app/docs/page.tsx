@@ -211,18 +211,29 @@ function HedgingSection() {
       The vault remains always solvent toward traders, while LPs assume directional risk in exchange for
       premium income. This is the same proven model used by leading DeFi options protocols like Lyra.
     </P>
-    <H3>Solvency Guarantee</H3>
+    <H3>Solvency Model (Risk-Weighted)</H3>
     <P>
-      The smart contract enforces a hard rule: <strong>vault collateral ≥ 1.2 × max possible payoff</strong>.
-      Every option purchase requires the vault to lock 120% of its worst-case payoff in collateral.
-      This guarantees traders can always be paid, regardless of market conditions.
+      All options on Abyssal.fi are <strong>European</strong>: they can only be exercised at expiry,
+      never before. Combined with staggered expiries (1D, 3D, 7D, 14D, 30D, custom), this means not
+      all options can be exercised simultaneously — only those maturing at a given moment.
     </P>
-    <Code>{`Max payoff per unit:
-  Call: spot_price × size  (capped at 2× spot for safety)
-  Put:  strike × size      (max if asset goes to zero)
+    <P>
+      The smart contract uses a <strong>risk-weighted collateral model</strong> rather than locking
+      worst-case payoffs. Each option&apos;s collateral contribution is its <strong>delta-weighted
+      max payoff</strong> — i.e., the probability-adjusted expected liability.
+    </P>
+    <Code>{`Per-option collateral requirement:
+  max_payoff       = spot × size  (calls) or  strike × size  (puts)
+  risk_weighted    = max_payoff × max(|delta|, 0.2)  // min 20% weight (tail)
+  required_vault   = sum(all options) × 1.2           // 20% safety buffer
 
-Solvency check (on every buyOption):
-  vault.usdc_balance + new_premium >= (open_interest + max_payoff) × 1.2`}</Code>
+A call with delta=0.3 has ~30% probability of expiring ITM.
+We collateralize the expected loss, not the worst case.`}</Code>
+    <P>
+      This lets LPs withdraw freely most of the time, and traders can always open new positions,
+      because the vault isn&apos;t locking capital against scenarios that can&apos;t physically happen
+      (like all options exercising at once).
+    </P>
     <H3>Utilization-Based IV Skew</H3>
     <P>
       When the vault becomes over-exposed in one direction, the smart contract <strong>automatically

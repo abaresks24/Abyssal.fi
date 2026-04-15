@@ -104,7 +104,7 @@ pub fn handler(ctx: Context<BuyOption>, args: BuyOptionArgs) -> Result<()> {
 
     // Validate expiry
     require!(args.expiry > now, OptionsError::OptionExpired);
-    let min_expiry = now + 3600;     // at least 1 hour
+    let min_expiry = now + 60;       // at least 1 minute
     let max_expiry = now + 7_776_000; // at most 90 days
     require!(args.expiry >= min_expiry, OptionsError::ExpiryTooClose);
     require!(args.expiry <= max_expiry, OptionsError::ExpiryTooFar);
@@ -196,7 +196,22 @@ pub fn handler(ctx: Context<BuyOption>, args: BuyOptionArgs) -> Result<()> {
         OptionsError::InsufficientUsdc
     );
 
-    // ── Collateral ratio check: vault must hold ≥ 120% of worst-case payoff ──
+    // ── Delta for risk calc + book-keeping ───────────────────────────────────
+    let delta = compute_delta(option_type, spot, args.strike, iv, time_years)
+        .unwrap_or(0);
+
+    // ── Risk-weighted collateral check ───────────────────────────────────────
+    //
+    // Traders don't all exercise simultaneously — options have different expiries,
+    // most expire OTM, and calls/puts partially offset. Instead of requiring 120%
+    // of worst-case max payoff (overly conservative), we use a risk-weighted
+    // model based on delta (probability of ITM).
+    //
+    //   risk_weighted_exposure = max_payoff × |delta|
+    //
+    // A call with delta=0.3 has ~30% chance of being ITM at expiry. We collateralize
+    // the expected loss, not the theoretical max. The 20% safety buffer absorbs
+    // unlikely outcomes (tail risk, simultaneous exercises, price gaps).
     let max_payoff_per_unit = match option_type {
         OptionType::Call => spot,
         OptionType::Put  => args.strike,
@@ -206,25 +221,25 @@ pub fn handler(ctx: Context<BuyOption>, args: BuyOptionArgs) -> Result<()> {
         .ok_or(OptionsError::MathOverflow)?
         .checked_div(SCALE as u128)
         .ok_or(OptionsError::MathOverflow)? as u64;
+
+    // risk-weighted by |delta| (delta is signed, scaled 1e6)
+    let delta_abs = delta.unsigned_abs();
+    // Ensure a minimum 20% weight to cover tail events even on deep OTM options
+    let effective_weight = (delta_abs.max(200_000)).min(1_000_000);
+    let risk_weighted_payoff = (max_payoff as u128)
+        .saturating_mul(effective_weight as u128) / (SCALE as u128);
+
     let vault_after_premium = ctx.accounts.usdc_vault.amount
         .checked_add(total_premium)
         .ok_or(OptionsError::MathOverflow)?;
-    let total_max_liability = ctx.accounts.vault.open_interest
-        .checked_add(max_payoff)
-        .ok_or(OptionsError::MathOverflow)?;
-    let required_collateral = (total_max_liability as u128)
-        .checked_mul(120)
-        .ok_or(OptionsError::MathOverflow)?
-        .checked_div(100)
-        .ok_or(OptionsError::MathOverflow)? as u64;
+    let total_risk_liability = (ctx.accounts.vault.open_interest as u128)
+        .saturating_add(risk_weighted_payoff);
+    // 120% safety buffer on the risk-weighted exposure
+    let required_collateral = total_risk_liability.saturating_mul(120) / 100;
     require!(
-        vault_after_premium >= required_collateral,
+        (vault_after_premium as u128) >= required_collateral,
         OptionsError::InsufficientCollateral
     );
-
-    // ── Delta for vault book-keeping ─────────────────────────────────────────
-    let delta = compute_delta(option_type, spot, args.strike, iv, time_years)
-        .unwrap_or(0);
 
     // ── Transfer USDC from buyer to vault ────────────────────────────────────
     let cpi_ctx = CpiContext::new(
@@ -242,11 +257,10 @@ pub fn handler(ctx: Context<BuyOption>, args: BuyOptionArgs) -> Result<()> {
     vault.total_collateral = vault.total_collateral
         .checked_add(total_premium)
         .ok_or(OptionsError::MathOverflow)?;
-    let oi_notional = (args.strike as u128)
-        .checked_mul(args.size as u128)
-        .ok_or(OptionsError::MathOverflow)?
-        .checked_div(SCALE as u128)
-        .ok_or(OptionsError::MathOverflow)? as u64;
+    // Store the RISK-WEIGHTED exposure (not raw notional). This reflects the
+    // expected liability, not worst-case. Keeps utilization realistic so LPs
+    // can withdraw and traders can trade 24/7 without overly-tight constraints.
+    let oi_notional = risk_weighted_payoff as u64;
     vault.open_interest = vault.open_interest
         .checked_add(oi_notional)
         .ok_or(OptionsError::MathOverflow)?;

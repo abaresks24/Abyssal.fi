@@ -68,9 +68,12 @@ export function computeStrikes(spot: number): number[] {
 
 // ── Expiries ──────────────────────────────────────────────────────────────────
 
-export const EXPIRY_OPTIONS: string[] = ['1D', '3D', '7D', '14D', '30D'];
+export const EXPIRY_OPTIONS: string[] = ['5M', '15M', '1H', '1D', '7D', '30D'];
 
 export const EXPIRY_TO_YEARS: Record<string, number> = {
+  '5M':  5 / (365 * 24 * 60),
+  '15M': 15 / (365 * 24 * 60),
+  '1H':  1 / (365 * 24),
   '1D':  1 / 365,
   '3D':  3 / 365,
   '7D':  7 / 365,
@@ -78,20 +81,36 @@ export const EXPIRY_TO_YEARS: Record<string, number> = {
   '30D': 30 / 365,
 };
 
-/** Convert any expiry string like "7D" or "45D" to a Date (8:00 UTC). */
+/** Parse expiry suffix: "M"=minutes, "H"=hours, "D"=days (default). */
+function parseExpiryUnit(expiry: string): { amount: number; unit: 'M' | 'H' | 'D' } {
+  const m = expiry.match(/^(\d+)([MHD])?$/i);
+  if (!m) return { amount: 7, unit: 'D' };
+  return {
+    amount: parseInt(m[1], 10),
+    unit: (m[2]?.toUpperCase() as 'M' | 'H' | 'D') ?? 'D',
+  };
+}
+
+/** Convert any expiry string like "5M", "1H", or "7D" to a Date. */
 export function expiryToDate(expiry: string): Date {
-  const days = parseInt(expiry, 10);
+  const { amount, unit } = parseExpiryUnit(expiry);
   const d = new Date();
-  d.setDate(d.getDate() + (isNaN(days) ? 7 : days));
-  d.setHours(8, 0, 0, 0);
+  if (unit === 'M') d.setTime(d.getTime() + amount * 60_000);
+  else if (unit === 'H') d.setTime(d.getTime() + amount * 3_600_000);
+  else {
+    d.setDate(d.getDate() + amount);
+    d.setHours(8, 0, 0, 0);
+  }
   return d;
 }
 
 /** Convert any expiry string to fractional years for Black-Scholes. */
 export function expiryStringToYears(expiry: string): number {
-  const days = parseInt(expiry, 10);
-  if (isNaN(days) || days <= 0) return 7 / 365;
-  return days / 365;
+  const { amount, unit } = parseExpiryUnit(expiry);
+  if (amount <= 0) return 7 / 365;
+  if (unit === 'M') return amount / (365 * 24 * 60);
+  if (unit === 'H') return amount / (365 * 24);
+  return amount / 365;
 }
 
 // ── Pacifica API endpoints ────────────────────────────────────────────────────
