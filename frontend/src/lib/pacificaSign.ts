@@ -35,23 +35,36 @@ function sortKeys(v: any): any {
   return v;
 }
 
+/**
+ * Sign a Pacifica API request.
+ *
+ * Two modes:
+ *   - Main wallet: signer = main wallet, account = main.pubkey, agent_wallet = null
+ *   - Agent wallet: signer = agent, account = main wallet pubkey, agent_wallet = agent.pubkey
+ *     (Preferred — agent can sign orders on behalf of main account without
+ *      having access to main wallet's custody.)
+ */
 export function signPacificaRequest(
-  keypair: Keypair,
+  signer: Keypair,
   opType: OpType,
   operationData: Record<string, any>,
-  expiryWindowMs = 30_000,
+  opts: { mainAccount?: string; expiryWindowMs?: number } = {},
 ) {
+  const expiryWindowMs = opts.expiryWindowMs ?? 30_000;
+  const mainAccount = opts.mainAccount ?? signer.publicKey.toBase58();
+  const isAgent = mainAccount !== signer.publicKey.toBase58();
+
   const timestamp = Date.now();
   const header = { timestamp, expiry_window: expiryWindowMs, type: opType };
   const toSign = { ...header, data: operationData };
   const sorted = sortKeys(toSign);
   const compact = JSON.stringify(sorted);
   const msg = new TextEncoder().encode(compact);
-  const sig = nacl.sign.detached(msg, keypair.secretKey);
+  const sig = nacl.sign.detached(msg, signer.secretKey);
   const signatureB58 = bs58.encode(sig);
   return {
-    account: keypair.publicKey.toBase58(),
-    agent_wallet: null,
+    account: mainAccount,
+    agent_wallet: isAgent ? signer.publicKey.toBase58() : null,
     signature: signatureB58,
     timestamp,
     expiry_window: expiryWindowMs,
@@ -61,24 +74,25 @@ export function signPacificaRequest(
 
 const PACIFICA_BASE = 'https://api.pacifica.fi/api/v1';
 
-/** Place a market order on Pacifica. */
+/** Place a market order on Pacifica. `mainAccount` only needed for agent-wallet mode. */
 export async function placeMarketOrder(
-  keypair: Keypair,
+  signer: Keypair,
   params: {
-    symbol: string;           // e.g. "BTC"
-    side: 'bid' | 'ask';      // bid=long, ask=short
-    amount: string;           // e.g. "0.1"
-    slippagePercent?: string; // e.g. "0.5"
+    symbol: string;
+    side: 'bid' | 'ask';
+    amount: string;
+    slippagePercent?: string;
     reduceOnly?: boolean;
+    mainAccount?: string;
   },
 ): Promise<{ order_id: number } | { error: string }> {
-  const body = signPacificaRequest(keypair, 'create_market_order', {
+  const body = signPacificaRequest(signer, 'create_market_order', {
     symbol: params.symbol,
     side: params.side,
     amount: params.amount,
     slippage_percent: params.slippagePercent ?? '1',
     reduce_only: params.reduceOnly ?? false,
-  });
+  }, { mainAccount: params.mainAccount });
   const res = await fetch(`${PACIFICA_BASE}/orders/create_market`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -1,22 +1,17 @@
 /**
- * Pacifica hedge keeper — banded delta hedging.
+ * Pacifica hedge keeper — banded delta hedging via agent wallet.
  *
- * GET/POST /api/keeper/hedge
+ * Env vars (two modes):
  *
- * Flow:
- *   1. Read vault.delta_net from Anchor program (per market)
- *   2. Fetch current Pacifica perp position (if any)
- *   3. Compute target: hedge position should offset vault's net delta
- *      - If vault is delta-short (sold calls) → go LONG on Pacifica
- *      - If vault is delta-long (sold puts)  → go SHORT on Pacifica
- *   4. Apply band: only rebalance if |delta_diff| > threshold (5% of notional)
- *   5. Place market order on Pacifica via signed API
+ *   Agent wallet mode (preferred, more secure):
+ *     PACIFICA_API_KEY       = Agent wallet private key (base58)
+ *     PACIFICA_MAIN_ACCOUNT  = Main wallet pubkey (the account holding USDC)
  *
- * Env vars:
- *   PACIFICA_API_KEY = Solana keypair base58 private key (the Pacifica account)
- *     This wallet must have USDC deposited on Pacifica for margin.
+ *   Direct mode:
+ *     PACIFICA_API_KEY       = Main wallet private key (base58)
+ *     PACIFICA_MAIN_ACCOUNT  = (omitted — derived from signer)
  *
- * Triggered by Vercel Cron every 2 min (see vercel.json).
+ * Triggered by Vercel Cron every 2 min.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
@@ -57,7 +52,8 @@ export async function GET(req: NextRequest) {
 
   try {
     const pacificaKp = loadPacificaKeypair();
-    const pacificaAccount = pacificaKp.publicKey.toBase58();
+    // Main account = wallet holding USDC on Pacifica (may differ from signer when using agent wallet)
+    const pacificaAccount = process.env.PACIFICA_MAIN_ACCOUNT || pacificaKp.publicKey.toBase58();
 
     // 1. Read vault state from on-chain
     const connection = new Connection(SOLANA_RPC, 'confirmed');
@@ -150,6 +146,7 @@ export async function GET(req: NextRequest) {
       amount: orderAmount.toFixed(4),
       slippagePercent: '2',
       reduceOnly,
+      mainAccount: pacificaAccount,
     });
 
     return NextResponse.json({
