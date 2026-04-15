@@ -215,6 +215,8 @@ pub fn handler(ctx: Context<SellOption>, args: SellOptionArgs) -> Result<()> {
     let is_full_close = ctx.accounts.position.size == args.size;
     let position = &mut ctx.accounts.position;
     position.size = position.size.saturating_sub(args.size);
+    // Track sale proceeds so realized PnL (payoff_received − premium_paid) is correct
+    position.payoff_received = position.payoff_received.saturating_add(net_proceeds);
     if position.size == 0 {
         position.settled = true;
     }

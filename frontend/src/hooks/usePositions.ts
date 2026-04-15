@@ -15,10 +15,13 @@ export function usePositions(owner: PublicKey | null) {
     setLoading(true);
     try {
       const result = await PacificaOptionsClient.getPositions(new PublicKey(ownerStr));
-      // Filter out orphan PDAs with size == 0 (ensure_series without a successful buy)
+      // Keep positions that either still have size OR were properly filled
+      // (premium_paid > 0). Drops orphan PDAs from ensure_series that never
+      // saw a buy_option.
       setPositions(result.filter((p: any) => {
-        const size = typeof p.size?.toNumber === 'function' ? p.size.toNumber() : Number(p.size ?? 0);
-        return size > 0;
+        const size    = Number(p.size ?? 0);
+        const premium = Number(p.premiumPaid ?? 0);
+        return size > 0 || premium > 0;
       }));
     } catch {
       setPositions([]);
