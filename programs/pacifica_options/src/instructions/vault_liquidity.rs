@@ -395,14 +395,11 @@ pub fn withdraw_vault(ctx: Context<WithdrawVault>, args: WithdrawVaultArgs) -> R
     require!(remaining >= min_required, OptionsError::InsufficientCollateral);
 
     // ── Yield accrual guard ──────────────────────────────────────────────────
-    // LP withdraws deposit + REAL fee share (proportional to vLP holdings since last deposit).
-    // Floor: guaranteed min APY (1%) even if no fees earned yet.
-    let clock = Clock::get()?;
+    // LP withdraws deposit + REAL fee share only. No floor — yield is 100%
+    // backed by actual fees collected by the vault.
     let max_withdraw = ctx.accounts.lp_position.max_withdrawable(
         vault.fees_collected,
         vault.total_vlp_tokens,
-        100, // 1% min APY floor (bps)
-        clock.unix_timestamp,
     );
     require!(
         usdc_out <= max_withdraw,
