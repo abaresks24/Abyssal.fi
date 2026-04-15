@@ -72,7 +72,7 @@ export function signPacificaRequest(
   };
 }
 
-const PACIFICA_BASE = 'https://api.pacifica.fi/api/v1';
+const PACIFICA_BASE = (process.env.PACIFICA_API_BASE_URL || 'https://api.pacifica.fi/api') + '/v1';
 
 /** Place a market order on Pacifica. `mainAccount` only needed for agent-wallet mode. */
 export async function placeMarketOrder(

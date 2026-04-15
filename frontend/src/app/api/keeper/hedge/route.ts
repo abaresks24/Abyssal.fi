@@ -85,7 +85,8 @@ export async function GET(req: NextRequest) {
     // Get mark price from our keeper cache (oracle)
     let markPrice = 75000;
     try {
-      const r = await fetch(`https://api.pacifica.fi/api/v1/kline/mark?symbol=${MARKET}&interval=1m&start_time=${Date.now() - 120000}&end_time=${Date.now()}&limit=1`);
+      const base = process.env.PACIFICA_API_BASE_URL || 'https://api.pacifica.fi/api';
+      const r = await fetch(`${base}/v1/kline/mark?symbol=${MARKET}&interval=1m&start_time=${Date.now() - 120000}&end_time=${Date.now()}&limit=1`);
       const j = await r.json();
       const p = parseFloat(j.data?.[j.data.length - 1]?.c ?? '0');
       if (p > 0) markPrice = p;
