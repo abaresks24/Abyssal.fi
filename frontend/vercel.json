@@ -4,11 +4,7 @@
   "crons": [
     {
       "path": "/api/keeper/settle",
-      "schedule": "0 * * * *"
-    },
-    {
-      "path": "/api/keeper/hedge",
-      "schedule": "0 * * * *"
+      "schedule": "0 12 * * *"
     }
   ]
 }
