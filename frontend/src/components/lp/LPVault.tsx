@@ -238,32 +238,6 @@ export function LPVault() {
       </div>
 
 
-      {/* Your yield accrual */}
-      {publicKey && depositedAmount > 0 && (
-        <div style={{
-          background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10,
-          padding: '14px 18px', position: 'relative', overflow: 'hidden',
-        }}>
-          <div style={{ position: 'absolute', top: 0, left: '10%', right: '10%', height: 1, background: 'linear-gradient(90deg, transparent, var(--green), transparent)', opacity: 0.3 }} />
-          <div style={{ fontSize: 10, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, fontWeight: 500 }}>Your Yield Accrual</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 2 }}>Deposited</div>
-              <div style={{ fontSize: 16, fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--text)' }}>${fmt(depositedAmount)}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 2 }}>Accrued Yield</div>
-              <div style={{ fontSize: 16, fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--green)' }}>+${fmt(accruedYield, 4)}</div>
-              <div style={{ fontSize: 9, color: 'var(--text3)' }}>{fmt(hoursElapsed, 1)}h × {fmt(displayApy, 1)}% APY</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 2 }}>Withdrawable</div>
-              <div style={{ fontSize: 16, fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--cyan)' }}>${fmt(effectiveMaxWithdraw, 4)}</div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Utilization warning */}
       {utilization > 80 && (
         <div style={{
