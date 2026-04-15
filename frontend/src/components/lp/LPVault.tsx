@@ -62,12 +62,14 @@ export function LPVault() {
   const vlpPrice      = totalVlpTokens > 0 ? totalCollateral / totalVlpTokens : 1;
   const utilization   = totalCollateral > 0 ? (openInterest / totalCollateral) * 100 : 0;
 
-  // ── Dynamic APY ────────────────────────────────────────────────────────────
-  // Base APY from fees (annualized)
-  const rawApy = totalCollateral > 0 ? (feesCollected / totalCollateral) * 12 * 100 : 0;
-  // APY increases with utilization to attract LPs when vault needs liquidity
-  const utilizationBoost = utilization > 80 ? 1.5 : utilization > 50 ? 1.2 : 1.0;
-  const displayApy = Math.max(rawApy * utilizationBoost, 0.5); // min 0.5% APY
+  // ── Dynamic APY (backed by real fees only) ────────────────────────────────
+  // Base rate = fees / collateral (simple, no monthly assumption — honest).
+  // Scaled linearly by utilization: 0.5× at 0% util, 1.5× at 100% util.
+  // No floor — if fees = 0, displayed APY = 0. Never promises yield we can't back.
+  const feeRatio   = totalCollateral > 0 ? feesCollected / totalCollateral : 0;
+  const annualized = feeRatio * 12 * 100; // × 12 extrapolation (monthly→yearly)
+  const utilScale  = 0.5 + Math.min(1, utilization / 100); // 0.5x–1.5x
+  const displayApy = annualized * utilScale;
 
   // ── Yield accrual (per-hour) ───────────────────────────────────────────────
   // User deposited X USDP → got vLP at entry price

@@ -23,6 +23,7 @@ use instructions::fill_written_listing::*;
 use instructions::cancel_listing::*;
 use instructions::settle_written_option::*;
 use instructions::mint_option_nft::*;
+use instructions::close_orphan::*;
 
 declare_id!("CBkvR8SeN6j8RQKB7dSxG3dza2v71XHmWEe8LgfMW1hG");
 
@@ -215,6 +216,18 @@ pub mod pacifica_options {
     /// Use when bookkeeping drifts from actual open positions.
     pub fn fix_open_interest(ctx: Context<FixOpenInterest>) -> Result<()> {
         instructions::vault_liquidity::fix_open_interest(ctx)
+    }
+
+    /// Close an OptionPosition PDA with size == 0 (orphan from failed buy).
+    /// Reclaims rent to the owner.
+    pub fn close_orphan_position(ctx: Context<CloseOrphanPosition>) -> Result<()> {
+        instructions::close_orphan::close_orphan_position(ctx)
+    }
+
+    /// Close an AmmPool PDA with zero reserves (orphan from unused series).
+    /// Reclaims rent to the vault authority.
+    pub fn close_orphan_amm_pool(ctx: Context<CloseOrphanAmmPool>) -> Result<()> {
+        instructions::close_orphan::close_orphan_amm_pool(ctx)
     }
 
     /// Transfer vLP mint authority from vault PDA to `new_authority`.
