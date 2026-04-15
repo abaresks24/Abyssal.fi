@@ -1,0 +1,29 @@
+name: Keeper Cron
+
+on:
+  schedule:
+    # Every 5 minutes
+    - cron: '*/5 * * * *'
+  workflow_dispatch:  # allow manual trigger from GitHub UI
+
+permissions:
+  contents: read
+
+jobs:
+  keeper:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Settle expired options
+        run: |
+          curl -sS -w "\nHTTP %{http_code} (%{time_total}s)\n" \
+            -X POST "https://abyssal-fi.vercel.app/api/keeper/settle" \
+            -H "Content-Type: application/json" \
+            -d '{}' || true
+
+      - name: Hedge delta exposure
+        run: |
+          curl -sS -w "\nHTTP %{http_code} (%{time_total}s)\n" \
+            -X POST "https://abyssal-fi.vercel.app/api/keeper/hedge" \
+            -H "Content-Type: application/json" \
+            -d '{}' || true
