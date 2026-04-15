@@ -155,25 +155,32 @@ impl VaultLPPosition {
         + 8   // fees_checkpoint
         + 8;  // padding
 
-    /// Max withdrawable = deposited + linearly-vested fee share - already withdrawn.
+    /// Max withdrawable = deposited + hourly-vested fee share - already withdrawn.
     ///
-    /// Fee share components:
-    ///   - Time-weighted: pondere par les secondes ecoulees depuis le depot
-    ///   - Vested: tu ne touches pas tout d'un coup, mais lineairement sur
-    ///     un cycle de 30 jours. Apres 7j → 7/30 = 23%, apres 30j → 100%.
-    ///   - After 30j, full entitlement is unlocked (recharges with new deposits).
+    /// Vesting mechanics:
+    ///   - Granularity: hourly (full hours only, no fractions of an hour)
+    ///   - Minimum lock: 1 hour after deposit before any yield can be withdrawn
+    ///   - Vesting period: 8760 hours (1 year) for full unlock
+    ///   - Each hour after deposit unlocks 1/8760 of total fee share
     ///
-    /// Formule complete:
+    /// Example: depose 10000 USDP at 18:30, vault generated 100 USDP of fees:
+    ///   - 18:30–19:29: max_withdraw = 10000 (only deposit)
+    ///   - 19:30:       max_withdraw = 10000 + 100/8760 ≈ 10000.0114
+    ///   - 20:30:       max_withdraw = 10000 + 200/8760 ≈ 10000.0228
+    ///   - +1 year:     max_withdraw = 10100 (full share)
+    ///
+    /// Formula:
     ///   raw_share = (fees_now - checkpoint) × vlp / total_vlp
-    ///   vested_pct = min(1.0, seconds_elapsed / VESTING_PERIOD)
-    ///   max_withdraw = deposited + raw_share × vested_pct - already_withdrawn
+    ///   hours_elapsed = floor((now - last_deposit_at) / 3600)
+    ///   vested = raw_share × min(hours_elapsed, 8760) / 8760
+    ///   max_withdraw = deposited + vested - already_withdrawn
     pub fn max_withdrawable(
         &self,
         vault_fees_collected: u64,
         vault_total_vlp: u64,
         now: i64,
     ) -> u64 {
-        const VESTING_SECS: u128 = 30 * 24 * 3600; // 30-day vesting
+        const VESTING_HOURS: u128 = 365 * 24; // 8760 hours = 1 year
 
         let raw_share = if vault_total_vlp > 0 && vault_fees_collected >= self.fees_checkpoint {
             let fees_since_deposit = (vault_fees_collected - self.fees_checkpoint) as u128;
@@ -184,13 +191,9 @@ impl VaultLPPosition {
             0u128
         };
 
-        // Linear vesting based on time since last deposit
-        let elapsed = (now - self.last_deposit_at).max(0) as u128;
-        let vested = if elapsed >= VESTING_SECS {
-            raw_share
-        } else {
-            raw_share.saturating_mul(elapsed) / VESTING_SECS
-        };
+        // Floor to integer hours (granularity = 1 hour). First slot unlocks at +1h.
+        let elapsed_hours = (((now - self.last_deposit_at).max(0) as u128) / 3600).min(VESTING_HOURS);
+        let vested = raw_share.saturating_mul(elapsed_hours) / VESTING_HOURS;
 
         let total_entitlement = (self.usdc_deposited as u128).saturating_add(vested);
         total_entitlement.saturating_sub(self.usdc_withdrawn as u128) as u64
