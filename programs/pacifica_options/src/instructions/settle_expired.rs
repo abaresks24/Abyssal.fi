@@ -166,12 +166,21 @@ pub fn handler(ctx: Context<SettleExpired>, args: SettleExpiredArgs) -> Result<(
     position.payoff_received = net_payoff;
 
     // ── Update vault state ───────────────────────────────────────────────────
+    // Decrement OI by the SAME risk-weighted amount that was added in buy_option.
+    // buy_option uses: risk_weighted = max_payoff × max(|delta|, 0.2)
+    // where max_payoff = spot×size (call) or strike×size (put)
     let vault = &mut ctx.accounts.vault;
-    let notional_usdc = (strike as u128)
+    let max_payoff_per_unit = match ctx.accounts.position.option_type {
+        OptionType::Call => ctx.accounts.iv_oracle.latest_price,
+        OptionType::Put  => strike,
+    };
+    let max_payoff = (max_payoff_per_unit as u128)
         .saturating_mul(size as u128)
         .checked_div(SCALE as u128)
-        .unwrap_or(0) as u64;
-    vault.open_interest = vault.open_interest.saturating_sub(notional_usdc);
+        .unwrap_or(0);
+    let weight = (entry_delta.unsigned_abs().max(200_000)).min(1_000_000) as u128;
+    let risk_weighted_notional = (max_payoff.saturating_mul(weight) / (SCALE as u128)) as u64;
+    vault.open_interest = vault.open_interest.saturating_sub(risk_weighted_notional);
     vault.total_collateral = vault.total_collateral.saturating_sub(net_payoff);
     vault.fees_collected = vault.fees_collected.saturating_add(fee);
     // Restore net delta: vault was short delta when it sold the option; on close, add it back

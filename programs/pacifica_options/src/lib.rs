@@ -211,6 +211,12 @@ pub mod pacifica_options {
         instructions::vault_liquidity::reset_vault(ctx)
     }
 
+    /// Fix stale OI/delta counters without moving funds. Authority-only.
+    /// Use when bookkeeping drifts from actual open positions.
+    pub fn fix_open_interest(ctx: Context<FixOpenInterest>) -> Result<()> {
+        instructions::vault_liquidity::fix_open_interest(ctx)
+    }
+
     /// Transfer vLP mint authority from vault PDA to `new_authority`.
     /// Use before creating Metaplex token metadata (mint authority must sign).
     /// Must call restore_vlp_mint_authority immediately after.

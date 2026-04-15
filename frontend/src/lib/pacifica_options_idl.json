@@ -1352,6 +1352,53 @@
       "args": []
     },
     {
+      "name": "fix_open_interest",
+      "docs": [
+        "Fix stale OI/delta counters without moving funds. Authority-only.",
+        "Use when bookkeeping drifts from actual open positions."
+      ],
+      "discriminator": [
+        195,
+        177,
+        215,
+        157,
+        120,
+        34,
+        231,
+        217
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "initialize_amm_pool",
       "docs": [
         "Initialize an AMM pool for a specific options series"

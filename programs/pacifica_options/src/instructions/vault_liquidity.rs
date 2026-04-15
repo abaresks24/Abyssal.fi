@@ -362,6 +362,30 @@ pub fn reset_vault(ctx: Context<ResetVault>) -> Result<()> {
     Ok(())
 }
 
+// ── Admin: fix stale OI/delta from old settlement bugs ──────────────────────
+// Safe to call at any time — does NOT move any funds. Only zeroes the
+// bookkeeping counters. Use when OI drifts from actual open positions.
+
+#[derive(Accounts)]
+pub struct FixOpenInterest<'info> {
+    #[account(
+        mut,
+        seeds = [b"vault", vault.authority.as_ref()],
+        bump = vault.bump,
+        constraint = authority.key() == vault.authority @ OptionsError::Unauthorized,
+    )]
+    pub vault: Box<Account<'info, OptionVault>>,
+    pub authority: Signer<'info>,
+}
+
+pub fn fix_open_interest(ctx: Context<FixOpenInterest>) -> Result<()> {
+    let vault = &mut ctx.accounts.vault;
+    vault.open_interest = 0;
+    vault.delta_net = 0;
+    msg!("Vault OI and delta_net reset to zero");
+    Ok(())
+}
+
 pub fn withdraw_vault(ctx: Context<WithdrawVault>, args: WithdrawVaultArgs) -> Result<()> {
     require!(!ctx.accounts.vault.paused, OptionsError::ProtocolPaused);
     require!(args.vlp_tokens > 0, OptionsError::ZeroLpTokens);
