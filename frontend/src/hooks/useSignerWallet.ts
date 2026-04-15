@@ -64,12 +64,26 @@ export function useSignerWallet() {
     const signed = await signTransaction(tx);
     const raw = signed.serialize();
 
-    const sig = await connection.sendRawTransaction(raw, {
-      skipPreflight: false,
-      preflightCommitment: 'confirmed',
-    });
-    await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
-    return sig;
+    // Phantom sometimes forwards the signed tx to its own RPC before ours.
+    // Handle "already processed" by recovering the pre-computed signature.
+    try {
+      const onChainSig = await connection.sendRawTransaction(raw, {
+        skipPreflight: false,
+        preflightCommitment: 'confirmed',
+      });
+      await connection.confirmTransaction({ signature: onChainSig, blockhash, lastValidBlockHeight }, 'confirmed');
+      return onChainSig;
+    } catch (e: any) {
+      if (/already (been )?processed/i.test(e?.message ?? '')) {
+        // Already submitted by the wallet's own RPC — look up actual signature
+        const actualSig = signed.signatures[0]?.signature;
+        if (actualSig) {
+          const bs58 = require('bs58');
+          return bs58.encode(actualSig);
+        }
+      }
+      throw e;
+    }
   }, [publicKey, signTransaction]);
 
   const walletForClient = useMemo(() => ({
