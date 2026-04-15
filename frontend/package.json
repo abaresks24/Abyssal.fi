@@ -22,6 +22,7 @@
     "@solana/wallet-adapter-wallets": "^0.19.32",
     "@solana/web3.js": "^1.91.8",
     "bn.js": "^5.2.1",
+    "bs58": "^6.0.0",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "decimal.js": "^10.4.3",
@@ -31,7 +32,8 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^2.12.4",
-    "tailwind-merge": "^2.3.0"
+    "tailwind-merge": "^2.3.0",
+    "tweetnacl": "^1.0.3"
   },
   "overrides": {
     "axios": "1.13.6"
