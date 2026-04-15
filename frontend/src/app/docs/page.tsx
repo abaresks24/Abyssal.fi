@@ -261,12 +261,31 @@ We collateralize the expected loss, not the worst case.`}</Code>
     <Li><strong>Hourly vesting (1-year unlock):</strong> yield accrues hourly, full unlock after 8760 hours</Li>
     <Li><strong>Solvency check:</strong> withdrawals blocked if vault would fall below 120% OI coverage</Li>
     <Li><strong>Real fee tracking:</strong> max withdrawal = deposit + (your share of fees since deposit)</Li>
-    <H3>Pacifica Integration</H3>
-    <P>Abyssal.fi integrates with Pacifica in 4 ways:</P>
-    <Li><strong>Mark price oracle:</strong> all options priced using Pacifica perp mark prices</Li>
-    <Li><strong>USDP collateral:</strong> the entire protocol uses Pacifica&apos;s USDP stablecoin</Li>
-    <Li><strong>Settlement:</strong> option payoffs computed from Pacifica spot prices at expiry</Li>
-    <Li><strong>Live data:</strong> WebSocket feed for real-time price updates in the UI</Li>
+    <H3>Pacifica Integration (5 ways)</H3>
+    <P>Abyssal.fi is built on top of Pacifica&apos;s infrastructure and uses it in five different ways:</P>
+    <Li><strong>1. Mark price oracle:</strong> all options priced using Pacifica perp mark prices (REST + WebSocket)</Li>
+    <Li><strong>2. USDC collateral:</strong> the entire protocol uses Pacifica&apos;s USDC stablecoin for settlement</Li>
+    <Li><strong>3. Settlement oracle:</strong> option payoffs computed from Pacifica spot prices at expiry</Li>
+    <Li><strong>4. Live data feed:</strong> WebSocket subscriptions for real-time prices in the UI</Li>
+    <Li><strong>5. Delta hedging via perps:</strong> the vault hedges its net delta exposure by opening offsetting long/short positions on Pacifica perps, using a banded rebalancing strategy (±5% threshold, every 2 minutes)</Li>
+    <H3>Hedging Architecture</H3>
+    <P>
+      The keeper service reads <Code>vault.delta_net</Code> on-chain every 2 minutes and compares it
+      to the current Pacifica perp position. If the delta drift exceeds 5% of the vault&apos;s notional,
+      the keeper places a market order on Pacifica (via signed ed25519 API request) to rebalance.
+    </P>
+    <Code>{`Vault delta-short (users bought calls)  →  Long BTC perp on Pacifica
+Vault delta-long (users bought puts)    →  Short BTC perp on Pacifica
+
+Rebalance only when |delta_diff| > 5% of notional
+Saves ~6-8× on funding fees vs. continuous hedging
+Protection against tail moves remains intact`}</Code>
+    <P>
+      The hedge wallet (funded separately from the vault, tracked via{' '}
+      <Code>PACIFICA_API_KEY</Code> env var) holds USDC on Pacifica and opens/closes positions
+      via signed REST API calls. Funding payments are a cost of the protocol; trade fees are a
+      cost to traders. LPs earn the spread between premium collected and hedge + funding costs.
+    </P>
   </>);
 }
 

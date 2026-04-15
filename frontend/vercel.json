@@ -5,6 +5,10 @@
     {
       "path": "/api/keeper/settle",
       "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/keeper/hedge",
+      "schedule": "*/2 * * * *"
     }
   ]
 }
