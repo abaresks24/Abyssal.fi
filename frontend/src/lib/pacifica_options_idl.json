@@ -509,6 +509,86 @@
       "args": []
     },
     {
+      "name": "close_orphan_amm_pool",
+      "docs": [
+        "Close an AmmPool PDA with zero reserves (orphan from unused series).",
+        "Reclaims rent to the vault authority."
+      ],
+      "discriminator": [
+        193,
+        82,
+        35,
+        40,
+        247,
+        24,
+        209,
+        130
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.authority",
+                "account": "OptionVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "amm_pool",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "close_orphan_position",
+      "docs": [
+        "Close an OptionPosition PDA with size == 0 (orphan from failed buy).",
+        "Reclaims rent to the owner."
+      ],
+      "discriminator": [
+        155,
+        171,
+        147,
+        191,
+        109,
+        113,
+        8,
+        197
+      ],
+      "accounts": [
+        {
+          "name": "position",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "deposit_vault",
       "docs": [
         "Deposit USDC into the global vault and receive vLP SPL tokens"
