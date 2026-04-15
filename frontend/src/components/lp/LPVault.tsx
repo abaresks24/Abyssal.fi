@@ -232,6 +232,58 @@ export function LPVault() {
         <StatCard label="Fees Collected"     value={statsLoading ? '—' : `$${fmt(feesCollected)}`}  sub={`vLP: $${fmt(vlpPrice, 4)}`} accent="var(--cyan)" />
       </div>
 
+      {/* ── Protocol Risk Dashboard ─────────────────────────────────────────── */}
+      <div style={{
+        background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10,
+        padding: '16px 20px', position: 'relative', overflow: 'hidden',
+      }}>
+        <div style={{ position: 'absolute', top: 0, left: '10%', right: '10%', height: 1, background: 'linear-gradient(90deg, transparent, var(--cyan), transparent)', opacity: 0.3 }} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>Protocol Risk</div>
+          {(() => {
+            const solvencyRatio = openInterest > 0 ? totalCollateral / (openInterest * 1.2) : 999;
+            const status = solvencyRatio > 2 ? 'Excellent' : solvencyRatio > 1.5 ? 'Healthy' : solvencyRatio > 1 ? 'Adequate' : 'At Risk';
+            const color = solvencyRatio > 1.5 ? 'var(--green)' : solvencyRatio > 1 ? 'var(--amber)' : 'var(--red)';
+            return <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 4, background: color + '22', color, border: `1px solid ${color}44`, fontWeight: 600 }}>{status}</span>;
+          })()}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+          <div>
+            <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 4 }}>Solvency Ratio</div>
+            <div style={{ fontSize: 18, fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--cyan)' }}>
+              {openInterest > 0 ? fmt(totalCollateral / (openInterest * 1.2), 2) : '∞'}x
+            </div>
+            <div style={{ fontSize: 9, color: 'var(--text3)' }}>TVL / (OI × 1.2)</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 4 }}>Max Exposure</div>
+            <div style={{ fontSize: 18, fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--text)' }}>
+              ${fmt(openInterest * 1.2)}
+            </div>
+            <div style={{ fontSize: 9, color: 'var(--text3)' }}>Worst-case payoff</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 4 }}>Buffer</div>
+            <div style={{ fontSize: 18, fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--green)' }}>
+              ${fmt(Math.max(0, totalCollateral - openInterest * 1.2))}
+            </div>
+            <div style={{ fontSize: 9, color: 'var(--text3)' }}>Free for new options</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 4 }}>IV Skew</div>
+            <div style={{ fontSize: 18, fontFamily: 'var(--mono)', fontWeight: 600, color: utilization > 50 ? 'var(--amber)' : 'var(--text)' }}>
+              {utilization > 50 ? `+${fmt(Math.min(50, utilization * 0.5), 0)}%` : 'Base'}
+            </div>
+            <div style={{ fontSize: 9, color: 'var(--text3)' }}>Auto-pricing adjustment</div>
+          </div>
+        </div>
+        <div style={{ marginTop: 12, fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>
+          Vault is always solvent toward traders (max payoff cap × 1.2 collateral guarantee).
+          IV automatically adjusts higher when vault exposure grows in one direction — discouraging trades that increase imbalance.
+          LPs earn premiums + fees, take directional risk on net delta exposure.
+        </div>
+      </div>
+
       {/* Your yield accrual */}
       {publicKey && depositedAmount > 0 && (
         <div style={{

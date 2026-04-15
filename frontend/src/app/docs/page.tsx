@@ -205,6 +205,62 @@ function NftSection() {
 
 function HedgingSection() {
   return (<>
+    <H2>Risk Model & Solvency</H2>
+    <P>
+      Abyssal.fi uses an <strong>utilization-based pricing model</strong> instead of external hedging.
+      The vault remains always solvent toward traders, while LPs assume directional risk in exchange for
+      premium income. This is the same proven model used by leading DeFi options protocols like Lyra.
+    </P>
+    <H3>Solvency Guarantee</H3>
+    <P>
+      The smart contract enforces a hard rule: <strong>vault collateral ≥ 1.2 × max possible payoff</strong>.
+      Every option purchase requires the vault to lock 120% of its worst-case payoff in collateral.
+      This guarantees traders can always be paid, regardless of market conditions.
+    </P>
+    <Code>{`Max payoff per unit:
+  Call: spot_price × size  (capped at 2× spot for safety)
+  Put:  strike × size      (max if asset goes to zero)
+
+Solvency check (on every buyOption):
+  vault.usdc_balance + new_premium >= (open_interest + max_payoff) × 1.2`}</Code>
+    <H3>Utilization-Based IV Skew</H3>
+    <P>
+      When the vault becomes over-exposed in one direction, the smart contract <strong>automatically
+      raises the IV (and therefore premium)</strong> for trades that would worsen the imbalance:
+    </P>
+    <Li>If users have bought lots of calls → vault is delta-short → call IV increases</Li>
+    <Li>If users have bought lots of puts → vault is delta-long → put IV increases</Li>
+    <Li>Skew formula: IV_adjusted = IV_base × (1 + exposure_ratio × 0.5)</Li>
+    <Li>Max skew: +50% IV at 100% exposure</Li>
+    <P>
+      This <strong>self-balancing mechanism</strong> discourages trades that push the vault into
+      excessive imbalance and incentivizes counter-balancing trades. No external hedge needed.
+    </P>
+    <H3>LP Risk Profile</H3>
+    <P>LPs earn revenue from:</P>
+    <Li><strong>Premiums:</strong> 100% of OTM-expired option premiums stay in the vault</Li>
+    <Li><strong>Trading fees:</strong> 0.05% (5 bps) on every option trade</Li>
+    <Li><strong>Spread between IV and realized vol:</strong> the &ldquo;volatility risk premium&rdquo;</Li>
+    <P>LPs lose when:</P>
+    <Li>A large move makes many options ITM simultaneously</Li>
+    <Li>Net delta exposure is wrong (e.g. vault long, market drops)</Li>
+    <Li>Realized volatility exceeds IV expectations</Li>
+    <H3>Withdrawal Protection</H3>
+    <P>To prevent LP runs that would compromise solvency, withdrawals are subject to:</P>
+    <Li><strong>Hourly vesting (1-year unlock):</strong> yield accrues hourly, full unlock after 8760 hours</Li>
+    <Li><strong>Solvency check:</strong> withdrawals blocked if vault would fall below 120% OI coverage</Li>
+    <Li><strong>Real fee tracking:</strong> max withdrawal = deposit + (your share of fees since deposit)</Li>
+    <H3>Pacifica Integration</H3>
+    <P>Abyssal.fi integrates with Pacifica in 4 ways:</P>
+    <Li><strong>Mark price oracle:</strong> all options priced using Pacifica perp mark prices</Li>
+    <Li><strong>USDP collateral:</strong> the entire protocol uses Pacifica&apos;s USDP stablecoin</Li>
+    <Li><strong>Settlement:</strong> option payoffs computed from Pacifica spot prices at expiry</Li>
+    <Li><strong>Live data:</strong> WebSocket feed for real-time price updates in the UI</Li>
+  </>);
+}
+
+function _LegacyHedgingSection() {
+  return (<>
     <H2>Delta Hedging</H2>
     <P>
       Abyssal.fi employs automatic delta hedging to manage the protocol&apos;s risk exposure when users

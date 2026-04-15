@@ -126,8 +126,41 @@ pub fn handler(ctx: Context<BuyOption>, args: BuyOptionArgs) -> Result<()> {
     let time_years = time_to_expiry_years(now, args.expiry)
         .ok_or(OptionsError::OptionExpired)?;
 
-    // Get IV from oracle (ATM IV used; a more complete impl would compute per-strike)
-    let iv = oracle.iv_atm;
+    // ── Utilization-based IV skew ────────────────────────────────────────────
+    // Base IV from oracle (AFVR surface ATM)
+    let base_iv = oracle.iv_atm;
+
+    // The vault tracks delta_net (signed). When user buys a call, vault becomes
+    // MORE delta-short (negative). When user buys a put, vault becomes MORE
+    // delta-long (positive). We want to discourage trades that push the vault
+    // further into imbalance — so we increase the IV (premium) for those trades.
+    //
+    // exposure_ratio = |delta_net × spot| / total_collateral, clamped to [0, 1]
+    // skew_bps      = exposure_ratio × 5000  // up to +50% IV at full exposure
+    //
+    // Apply skew if the new trade pushes delta further from zero (same direction).
+    let vault_state = &ctx.accounts.vault;
+    let pushes_further = match option_type {
+        // Buying call decreases delta_net — bad if already negative
+        OptionType::Call => vault_state.delta_net < 0,
+        // Buying put increases delta_net — bad if already positive
+        OptionType::Put  => vault_state.delta_net > 0,
+    };
+
+    let skew_iv = if pushes_further && vault_state.total_collateral > 0 {
+        let delta_notional = (vault_state.delta_net.unsigned_abs() as u128)
+            .saturating_mul(spot as u128)
+            / SCALE as u128;
+        let exposure_pct = (delta_notional.saturating_mul(10_000) / vault_state.total_collateral as u128).min(10_000);
+        // skew = base_iv × (1 + exposure_pct × 0.5 / 100)
+        // At 100% exposure: +50% IV
+        let bonus_bps = exposure_pct.saturating_mul(50) / 100; // up to 5000 bps
+        (base_iv as u128).saturating_mul(10_000 + bonus_bps) / 10_000
+    } else {
+        base_iv as u128
+    };
+
+    let iv = (skew_iv.min(5_000_000) as u64).max(10_000);
     require!(
         iv >= 10_000 && iv <= 5_000_000,
         OptionsError::IVOutOfRange
