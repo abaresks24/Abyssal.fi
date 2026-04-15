@@ -6,11 +6,12 @@ node_modules/
 **/.next/
 **/.turbo/
 **/target/
-*.png
-*.pdf
-*.svg
-Landing.png
-Logo.svg
+# Root-level assets (not the frontend/public ones)
+/*.png
+/*.pdf
+/*.svg
+/Landing.png
+/Logo.svg
 Cargo.lock
 Cargo.toml
 Anchor.toml
