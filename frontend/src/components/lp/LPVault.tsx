@@ -105,7 +105,7 @@ export function LPVault() {
   })();
 
   // Hardcoded USDP mint — same as faucet, same as vault. No env var dependency.
-  const USDP_MINT = useMemo(() => new PublicKey('HC53kut48rC2raro2XkuzmQD1g4MA3XgDK1HtfCfXf6k'), []);
+  const USDP_MINT = useMemo(() => new PublicKey('USDPqRbLidFGufty2s3oizmDEKdqx7ePTqzDMbf5ZKM'), []);
 
   const fetchBalances = useCallback(async () => {
     if (!publicKey) { setVlpBalance(0); setUsdpBalance(null); return; }

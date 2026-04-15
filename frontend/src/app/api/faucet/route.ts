@@ -31,7 +31,7 @@ import {
 const SOLANA_RPC = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
 
 // Pacifica USDP mint on devnet
-const USDP_MINT = new PublicKey('HC53kut48rC2raro2XkuzmQD1g4MA3XgDK1HtfCfXf6k');
+const USDP_MINT = new PublicKey('USDPqRbLidFGufty2s3oizmDEKdqx7ePTqzDMbf5ZKM');
 
 // SOL sent to each claimant — enough for ~20 transactions
 const SOL_FILL = Math.round(0.05 * LAMPORTS_PER_SOL);
