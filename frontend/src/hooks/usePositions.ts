@@ -15,7 +15,11 @@ export function usePositions(owner: PublicKey | null) {
     setLoading(true);
     try {
       const result = await PacificaOptionsClient.getPositions(new PublicKey(ownerStr));
-      setPositions(result);
+      // Filter out orphan PDAs with size == 0 (ensure_series without a successful buy)
+      setPositions(result.filter((p: any) => {
+        const size = typeof p.size?.toNumber === 'function' ? p.size.toNumber() : Number(p.size ?? 0);
+        return size > 0;
+      }));
     } catch {
       setPositions([]);
     } finally {

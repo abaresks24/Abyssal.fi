@@ -24,7 +24,7 @@ export function BurnVlpButton({ onDone }: { onDone?: () => void }) {
 
       const bal = await conn.getTokenAccountBalance(ata);
       const amount = BigInt(bal.value.amount);
-      if (amount === 0n) { setErr('No vLP to burn.'); return; }
+      if (amount === BigInt(0)) { setErr('No vLP to burn.'); return; }
 
       const tx = new Transaction().add(
         createBurnInstruction(ata, vlpMint, publicKey, amount, [], TOKEN_PROGRAM_ID)
