@@ -218,8 +218,8 @@ export function LPVault() {
         <h2 style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, letterSpacing: '-0.02em' }}>LP Vault</h2>
         <div style={{ flex: 1 }} />
         {!isMobile && (
-          <div style={{ fontSize: 11, padding: '3px 10px', borderRadius: 4, background: 'rgba(85,195,233,0.12)', color: 'var(--cyan)', border: '1px solid rgba(85,195,233,0.25)', fontWeight: 600 }}>
-            ABLP — Powered by Pacifica USDP
+          <div style={{ fontSize: 11, color: 'var(--text3)' }}>
+            ABLP · Powered by Pacifica USDP
           </div>
         )}
       </div>

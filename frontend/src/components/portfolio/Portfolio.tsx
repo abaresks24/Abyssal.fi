@@ -193,13 +193,8 @@ export function Portfolio() {
                   </span>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4, alignItems: 'center' }}>
                     {filter === 'open' && p.expiry.getTime() <= Date.now() && !p.settled && (
-                      <span style={{
-                        padding: '3px 8px', fontSize: 9, fontWeight: 600,
-                        background: 'var(--amber-dim)', color: 'var(--amber)',
-                        border: '1px solid rgba(236,202,90,0.3)', borderRadius: 4,
-                        letterSpacing: '0.05em', textTransform: 'uppercase',
-                      }}>
-                        Auto-settling
+                      <span style={{ fontSize: 10, color: 'var(--amber)', fontStyle: 'italic' }}>
+                        settling…
                       </span>
                     )}
                     <a

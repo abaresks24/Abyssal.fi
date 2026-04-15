@@ -44,7 +44,7 @@ function Dropdown<T extends string>({ label, value, options, onChange }: { label
 }
 
 function Badge({ text, color }: { text: string; color: string }) {
-  return <span style={{ display: 'inline-block', padding: '1px 6px', borderRadius: 3, fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 600, background: `${color}22`, color, border: `1px solid ${color}44` }}>{text}</span>;
+  return <span style={{ fontSize: 11, fontFamily: 'var(--mono)', fontWeight: 600, color }}>{text}</span>;
 }
 
 // ── Create Listing Form ───────────────────────────────────────────────────────
@@ -296,7 +296,7 @@ export function Marketplace() {
       <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontWeight: 700, fontSize: 16 }}>P2P Marketplace</span>
-          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: 'var(--cyan-dim)', color: 'var(--cyan)', border: '1px solid rgba(85,195,233,0.2)', fontWeight: 600 }}>{filtered.length}</span>
+          <span style={{ fontSize: 11, color: 'var(--text3)' }}>{filtered.length} listing{filtered.length !== 1 ? 's' : ''}</span>
           <button onClick={fetchListings} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 13 }} title="Refresh">↻</button>
         </div>
         <button onClick={() => setShowCreate(true)} disabled={!publicKey} style={{

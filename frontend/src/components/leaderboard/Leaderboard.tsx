@@ -16,11 +16,7 @@ export function Leaderboard() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <h2 style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, letterSpacing: '-0.02em' }}>Leaderboard</h2>
         <div style={{ flex: 1 }} />
-        <span style={{
-          fontSize: 11, padding: '3px 10px', borderRadius: 20,
-          background: 'var(--amber-dim)', color: 'var(--amber)',
-          border: '1px solid rgba(236,202,90,0.25)', fontWeight: 600,
-        }}>
+        <span style={{ fontSize: 11, color: 'var(--text3)' }}>
           S1 · Devnet
         </span>
       </div>
