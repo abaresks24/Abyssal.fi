@@ -5358,7 +5358,7 @@
     {
       "name": "VaultLPPosition",
       "docs": [
-        "Global vault LP position — tracks a user's vLP deposit, yield accrual, and withdrawal limits."
+        "Global vault LP position — tracks deposit, yield share based on real vault fees."
       ],
       "type": {
         "kind": "struct",
@@ -5399,7 +5399,7 @@
           {
             "name": "last_deposit_at",
             "docs": [
-              "Last deposit timestamp (for time-lock)"
+              "Last deposit timestamp"
             ],
             "type": "i64"
           },
@@ -5411,11 +5411,19 @@
             "type": "u64"
           },
           {
+            "name": "fees_checkpoint",
+            "docs": [
+              "Vault's cumulative fees at time of last deposit (checkpoint)",
+              "Used to compute the LP's fair share of fees earned since deposit."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "_padding",
             "type": {
               "array": [
                 "u8",
-                16
+                8
               ]
             }
           }

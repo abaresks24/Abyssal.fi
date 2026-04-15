@@ -119,7 +119,7 @@ impl LPPosition {
     pub const LEN: usize = 8 + 1 + 32 + 32 + 8 + 8 + 8 + 32;
 }
 
-/// Global vault LP position — tracks a user's vLP deposit, yield accrual, and withdrawal limits.
+/// Global vault LP position — tracks deposit, yield share based on real vault fees.
 #[account]
 #[derive(Debug)]
 pub struct VaultLPPosition {
@@ -132,11 +132,14 @@ pub struct VaultLPPosition {
     pub usdc_deposited: u64,
     /// First deposit timestamp
     pub created_at: i64,
-    /// Last deposit timestamp (for time-lock)
+    /// Last deposit timestamp
     pub last_deposit_at: i64,
     /// Cumulative USDC already withdrawn
     pub usdc_withdrawn: u64,
-    pub _padding: [u8; 16],
+    /// Vault's cumulative fees at time of last deposit (checkpoint)
+    /// Used to compute the LP's fair share of fees earned since deposit.
+    pub fees_checkpoint: u64,
+    pub _padding: [u8; 8],
 }
 
 impl VaultLPPosition {
@@ -149,18 +152,45 @@ impl VaultLPPosition {
         + 8   // created_at
         + 8   // last_deposit_at
         + 8   // usdc_withdrawn
-        + 16; // padding
+        + 8   // fees_checkpoint
+        + 8;  // padding
 
-    /// Max withdrawable = deposited + accrued yield - already withdrawn.
-    /// Yield = deposited × apy_bps/10000 × seconds_elapsed / SECONDS_PER_YEAR.
-    pub fn max_withdrawable(&self, now: i64, apy_bps: u64) -> u64 {
+    /// Max withdrawable = deposited + real fee share - already withdrawn.
+    ///
+    /// Fee share = (fees_collected_now - fees_checkpoint) × (vlp_tokens / total_vlp_tokens)
+    ///
+    /// This gives each LP their proportional share of fees earned since their
+    /// last deposit, based on their vLP holdings. Newer depositors earn less
+    /// (shorter time window), larger holders earn more (bigger share).
+    pub fn max_withdrawable(
+        &self,
+        vault_fees_collected: u64,
+        vault_total_vlp: u64,
+        min_apy_bps: u64,
+        now: i64,
+    ) -> u64 {
+        // Real fee share (proportional)
+        let fee_share = if vault_total_vlp > 0 && vault_fees_collected >= self.fees_checkpoint {
+            let fees_since_deposit = (vault_fees_collected - self.fees_checkpoint) as u128;
+            fees_since_deposit
+                .saturating_mul(self.vlp_tokens as u128)
+                / (vault_total_vlp as u128)
+        } else {
+            0u128
+        };
+
+        // Floor: guaranteed minimum APY even if no fees were collected
         let elapsed = (now - self.created_at).max(0) as u128;
         const YEAR_SECS: u128 = 365 * 24 * 3600;
-        let yield_earned = (self.usdc_deposited as u128)
-            .saturating_mul(apy_bps as u128)
+        let min_yield = (self.usdc_deposited as u128)
+            .saturating_mul(min_apy_bps as u128)
             .saturating_mul(elapsed)
             / (10_000u128 * YEAR_SECS);
-        let total_entitlement = (self.usdc_deposited as u128).saturating_add(yield_earned);
+
+        // Use the higher of the two (LP gets the better of real fees vs floor)
+        let effective_yield = fee_share.max(min_yield);
+
+        let total_entitlement = (self.usdc_deposited as u128).saturating_add(effective_yield);
         total_entitlement.saturating_sub(self.usdc_withdrawn as u128) as u64
     }
 }

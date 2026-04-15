@@ -181,8 +181,10 @@ pub fn deposit_vault(ctx: Context<DepositVault>, args: DepositVaultArgs) -> Resu
     )?;
 
     // 3. Update LP position tracker (before mutable vault borrow)
+    // Snapshot vault.fees_collected so we can compute fee share earned after this deposit.
     let clock = Clock::get()?;
     let vault_key = ctx.accounts.vault.key();
+    let vault_fees_now = ctx.accounts.vault.fees_collected;
     {
         let lp = &mut ctx.accounts.lp_position;
         if lp.created_at == 0 {
@@ -194,6 +196,9 @@ pub fn deposit_vault(ctx: Context<DepositVault>, args: DepositVaultArgs) -> Resu
         lp.vlp_tokens = lp.vlp_tokens.checked_add(vlp_tokens).ok_or(OptionsError::MathOverflow)?;
         lp.usdc_deposited = lp.usdc_deposited.checked_add(args.usdc_amount).ok_or(OptionsError::MathOverflow)?;
         lp.last_deposit_at = clock.unix_timestamp;
+        // Reset fees_checkpoint on each deposit so the LP only earns fees going forward
+        // from their latest deposit weighted by their new total vLP holdings.
+        lp.fees_checkpoint = vault_fees_now;
     }
 
     // 4. Update vault totals
@@ -390,16 +395,15 @@ pub fn withdraw_vault(ctx: Context<WithdrawVault>, args: WithdrawVaultArgs) -> R
     require!(remaining >= min_required, OptionsError::InsufficientCollateral);
 
     // ── Yield accrual guard ──────────────────────────────────────────────────
-    // LP can only withdraw deposit + accrued yield, NOT the full vault share.
-    // APY = 100 bps base (1%) + utilization boost.
-    // This prevents infinite extraction from vault share appreciation.
+    // LP withdraws deposit + REAL fee share (proportional to vLP holdings since last deposit).
+    // Floor: guaranteed min APY (1%) even if no fees earned yet.
     let clock = Clock::get()?;
-    let utilization_pct = if vault.total_collateral > 0 {
-        vault.open_interest.saturating_mul(100) / vault.total_collateral
-    } else { 0 };
-    // APY in bps: 100 base + up to 200 extra at high utilization
-    let apy_bps = 100u64 + if utilization_pct > 80 { 200 } else if utilization_pct > 50 { 100 } else { 0 };
-    let max_withdraw = ctx.accounts.lp_position.max_withdrawable(clock.unix_timestamp, apy_bps);
+    let max_withdraw = ctx.accounts.lp_position.max_withdrawable(
+        vault.fees_collected,
+        vault.total_vlp_tokens,
+        100, // 1% min APY floor (bps)
+        clock.unix_timestamp,
+    );
     require!(
         usdc_out <= max_withdraw,
         OptionsError::WithdrawExceedsYield
