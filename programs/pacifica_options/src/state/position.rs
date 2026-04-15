@@ -155,19 +155,27 @@ impl VaultLPPosition {
         + 8   // fees_checkpoint
         + 8;  // padding
 
-    /// Max withdrawable = deposited + real fee share - already withdrawn.
+    /// Max withdrawable = deposited + linearly-vested fee share - already withdrawn.
     ///
-    /// Fee share = (fees_collected_now - fees_checkpoint) × (vlp_tokens / total_vlp_tokens)
+    /// Fee share components:
+    ///   - Time-weighted: pondere par les secondes ecoulees depuis le depot
+    ///   - Vested: tu ne touches pas tout d'un coup, mais lineairement sur
+    ///     un cycle de 30 jours. Apres 7j → 7/30 = 23%, apres 30j → 100%.
+    ///   - After 30j, full entitlement is unlocked (recharges with new deposits).
     ///
-    /// 100% based on real fees collected by the vault. No floor — yield is
-    /// only what the protocol actually earned. Each LP gets their proportional
-    /// share since their last deposit.
+    /// Formule complete:
+    ///   raw_share = (fees_now - checkpoint) × vlp / total_vlp
+    ///   vested_pct = min(1.0, seconds_elapsed / VESTING_PERIOD)
+    ///   max_withdraw = deposited + raw_share × vested_pct - already_withdrawn
     pub fn max_withdrawable(
         &self,
         vault_fees_collected: u64,
         vault_total_vlp: u64,
+        now: i64,
     ) -> u64 {
-        let fee_share = if vault_total_vlp > 0 && vault_fees_collected >= self.fees_checkpoint {
+        const VESTING_SECS: u128 = 30 * 24 * 3600; // 30-day vesting
+
+        let raw_share = if vault_total_vlp > 0 && vault_fees_collected >= self.fees_checkpoint {
             let fees_since_deposit = (vault_fees_collected - self.fees_checkpoint) as u128;
             fees_since_deposit
                 .saturating_mul(self.vlp_tokens as u128)
@@ -176,7 +184,15 @@ impl VaultLPPosition {
             0u128
         };
 
-        let total_entitlement = (self.usdc_deposited as u128).saturating_add(fee_share);
+        // Linear vesting based on time since last deposit
+        let elapsed = (now - self.last_deposit_at).max(0) as u128;
+        let vested = if elapsed >= VESTING_SECS {
+            raw_share
+        } else {
+            raw_share.saturating_mul(elapsed) / VESTING_SECS
+        };
+
+        let total_entitlement = (self.usdc_deposited as u128).saturating_add(vested);
         total_entitlement.saturating_sub(self.usdc_withdrawn as u128) as u64
     }
 }

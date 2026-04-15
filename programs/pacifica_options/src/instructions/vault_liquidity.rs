@@ -395,11 +395,14 @@ pub fn withdraw_vault(ctx: Context<WithdrawVault>, args: WithdrawVaultArgs) -> R
     require!(remaining >= min_required, OptionsError::InsufficientCollateral);
 
     // ── Yield accrual guard ──────────────────────────────────────────────────
-    // LP withdraws deposit + REAL fee share only. No floor — yield is 100%
-    // backed by actual fees collected by the vault.
+    // LP withdraws deposit + linearly-vested fee share (30-day vesting).
+    // Yield is 100% backed by actual fees, vested over time so retraits sont
+    // progressifs et eq protocole reste solvent.
+    let clock = Clock::get()?;
     let max_withdraw = ctx.accounts.lp_position.max_withdrawable(
         vault.fees_collected,
         vault.total_vlp_tokens,
+        clock.unix_timestamp,
     );
     require!(
         usdc_out <= max_withdraw,
