@@ -98,6 +98,20 @@ pub fn handler(ctx: Context<MintOptionNft>) -> Result<()> {
     );
     token::mint_to(mint_cpi, 1)?;
 
+    // ── Approve vault PDA as delegate over the NFT (amount=1) ──────────────
+    // This lets the vault burn the NFT on settle (keeper-signed tx), and
+    // transfer it to a buyer on marketplace fill — without requiring the
+    // holder to sign each time.
+    let approve_cpi = CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        token::Approve {
+            to:        ctx.accounts.buyer_nft_ata.to_account_info(),
+            delegate:  ctx.accounts.vault.to_account_info(),
+            authority: ctx.accounts.buyer.to_account_info(),
+        },
+    );
+    token::approve(approve_cpi, 1)?;
+
     // ── Build NFT name: "ABYSSAL BTC CALL $95000" ──────────────────────────
     let pos        = &ctx.accounts.position;
     let market_str = market_label(pos.market);
@@ -121,18 +135,27 @@ pub fn handler(ctx: Context<MintOptionNft>) -> Result<()> {
         },
         signer_seeds,
     );
+    // URI points to a dynamic Next.js endpoint that serves rich JSON
+    // (strike, spot_at_buy, expiry, premium_paid, timestamp) read from
+    // on-chain position state. Keeps NFT creation lean while enabling
+    // rich wallet displays.
+    let uri = format!(
+        "https://abyssal-fi.vercel.app/api/nft/{}",
+        ctx.accounts.position.key()
+    );
+
     create_metadata_accounts_v3(
         meta_cpi,
         DataV2 {
             name:                    name_str.to_string(),
             symbol:                  "ABYS".to_string(),
-            uri:                     "".to_string(),
+            uri,
             seller_fee_basis_points: 0,
             creators:                None,
             collection:              None,
             uses:                    None,
         },
-        false, // is_mutable
+        true,  // is_mutable (so we could update metadata later if needed)
         true,  // update_authority_is_signer
         None,  // collection_details
     )?;
@@ -206,3 +229,4 @@ fn build_nft_name<'a>(buf: &'a mut [u8; 32], market: &str, opt_type: &str, strik
 
     core::str::from_utf8(&buf[..pos]).unwrap_or("ABYSSAL OPTION")
 }
+

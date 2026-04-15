@@ -1272,8 +1272,142 @@
           "signer": true
         },
         {
+          "name": "nft_mint",
+          "docs": [
+            "NFT mint for the seller's original position"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  110,
+                  102,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "seller_position"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seller_nft_ata",
+          "docs": [
+            "Seller's NFT ATA (source) — owned by listing.seller"
+          ],
+          "writable": true
+        },
+        {
+          "name": "buyer_nft_ata",
+          "docs": [
+            "Buyer's NFT ATA (destination) — init_if_needed"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "buyer"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "nft_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
           "name": "system_program",
@@ -2970,20 +3104,64 @@
         {
           "name": "holder",
           "docs": [
-            "Option holder's wallet pubkey — used to verify the position PDA"
+            "Original buyer pubkey — used ONLY as a seed for deriving the position PDA.",
+            "Does NOT receive the payoff (the current NFT holder does)."
           ]
         },
         {
           "name": "position",
           "docs": [
-            "Position to settle — PDA verified via holder + vault seeds"
+            "Position to settle — PDA verified via original-buyer + vault seeds"
           ],
           "writable": true
         },
         {
+          "name": "nft_holder",
+          "docs": [
+            "Current NFT holder — receives the payoff (if ITM)."
+          ]
+        },
+        {
           "name": "holder_usdc",
           "docs": [
-            "Option holder's USDC (receives any payoff if ITM)"
+            "NFT holder's USDC account — receives any payoff if ITM"
+          ],
+          "writable": true
+        },
+        {
+          "name": "nft_mint",
+          "docs": [
+            "Option NFT mint (PDA: [\"option_nft\", position])"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  110,
+                  102,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "position"
+              }
+            ]
+          }
+        },
+        {
+          "name": "holder_nft_ata",
+          "docs": [
+            "Current holder's NFT ATA — must own 1 NFT; burned on settle"
           ],
           "writable": true
         },

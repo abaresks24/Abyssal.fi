@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token, TokenAccount, Transfer};
+use anchor_spl::token::{self, Token, TokenAccount, Transfer, Burn, Mint};
 use crate::state::vault::OptionVault;
 use crate::state::position::{OptionPosition, OptionType};
 use crate::state::iv_oracle::IVOracle;
@@ -42,11 +42,12 @@ pub struct SettleExpired<'info> {
     )]
     pub iv_oracle: Box<Account<'info, IVOracle>>,
 
-    /// Option holder's wallet pubkey — used to verify the position PDA
+    /// Original buyer pubkey — used ONLY as a seed for deriving the position PDA.
+    /// Does NOT receive the payoff (the current NFT holder does).
     /// CHECK: Only used as a seed for deriving the position PDA
     pub holder: UncheckedAccount<'info>,
 
-    /// Position to settle — PDA verified via holder + vault seeds
+    /// Position to settle — PDA verified via original-buyer + vault seeds
     #[account(
         mut,
         seeds = [
@@ -63,13 +64,34 @@ pub struct SettleExpired<'info> {
     )]
     pub position: Box<Account<'info, OptionPosition>>,
 
-    /// Option holder's USDC (receives any payoff if ITM)
+    /// Current NFT holder — receives the payoff (if ITM).
+    /// CHECK: verified via holder_nft_ata ownership + amount.
+    pub nft_holder: UncheckedAccount<'info>,
+
+    /// NFT holder's USDC account — receives any payoff if ITM
     #[account(
         mut,
         token::mint = vault.usdc_mint,
-        token::authority = holder,
+        token::authority = nft_holder,
     )]
     pub holder_usdc: Box<Account<'info, TokenAccount>>,
+
+    /// Option NFT mint (PDA: ["option_nft", position])
+    #[account(
+        mut,
+        seeds = [b"option_nft", position.key().as_ref()],
+        bump,
+    )]
+    pub nft_mint: Box<Account<'info, Mint>>,
+
+    /// Current holder's NFT ATA — must own 1 NFT; burned on settle
+    #[account(
+        mut,
+        token::mint = nft_mint,
+        token::authority = nft_holder,
+        constraint = holder_nft_ata.amount >= 1 @ OptionsError::Unauthorized,
+    )]
+    pub holder_nft_ata: Box<Account<'info, TokenAccount>>,
 
     /// Keeper must sign
     #[account(
@@ -189,6 +211,24 @@ pub fn handler(ctx: Context<SettleExpired>, args: SettleExpiredArgs) -> Result<(
         .checked_div(SCALE as i128)
         .unwrap_or(0) as i64;
     vault.delta_net = vault.delta_net.saturating_add(delta_contribution);
+
+    // ── Burn NFT receipt (vault signs as pre-approved delegate) ──────────────
+    {
+        let authority_key = ctx.accounts.vault.authority;
+        let vault_bump = ctx.accounts.vault.bump;
+        let vault_seeds: &[&[u8]] = &[b"vault", authority_key.as_ref(), &[vault_bump]];
+        let signer_seeds = &[vault_seeds];
+        let burn_cpi = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            Burn {
+                mint:      ctx.accounts.nft_mint.to_account_info(),
+                from:      ctx.accounts.holder_nft_ata.to_account_info(),
+                authority: ctx.accounts.vault.to_account_info(),
+            },
+            signer_seeds,
+        );
+        token::burn(burn_cpi, 1)?;
+    }
 
     msg!(
         "Position settled: itm={}, settlement_price={}, net_payoff={}, fee={}",

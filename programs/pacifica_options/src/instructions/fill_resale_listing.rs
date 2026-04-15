@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token, TokenAccount, Transfer};
+use anchor_spl::token::{self, Token, TokenAccount, Transfer, Mint};
+use anchor_spl::associated_token::AssociatedToken;
 use crate::state::vault::OptionVault;
 use crate::state::position::OptionPosition;
 use crate::state::listing::{OptionListing, ListingType};
@@ -82,7 +83,34 @@ pub struct FillResaleListing<'info> {
     #[account(mut)]
     pub buyer: Signer<'info>,
 
+    // ── NFT transfer (seller → buyer) ────────────────────────────────────────
+    /// NFT mint for the seller's original position
+    #[account(
+        mut,
+        seeds = [b"option_nft", seller_position.key().as_ref()],
+        bump,
+    )]
+    pub nft_mint: Box<Account<'info, Mint>>,
+
+    /// Seller's NFT ATA (source) — owned by listing.seller
+    #[account(
+        mut,
+        token::mint = nft_mint,
+        constraint = seller_nft_ata.owner == listing.seller @ OptionsError::Unauthorized,
+    )]
+    pub seller_nft_ata: Box<Account<'info, TokenAccount>>,
+
+    /// Buyer's NFT ATA (destination) — init_if_needed
+    #[account(
+        init_if_needed,
+        payer = buyer,
+        associated_token::mint = nft_mint,
+        associated_token::authority = buyer,
+    )]
+    pub buyer_nft_ata: Box<Account<'info, TokenAccount>>,
+
     pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
 }
@@ -99,6 +127,12 @@ pub fn handler(ctx: Context<FillResaleListing>) -> Result<()> {
 
     let ask_price = ctx.accounts.listing.ask_price;
     let size      = ctx.accounts.listing.size;
+    // For clean NFT transfer semantics, require full-position resale.
+    // Partial resales would leave the NFT with the seller but split size.
+    require!(
+        size == ctx.accounts.seller_position.size,
+        OptionsError::InvalidSize
+    );
 
     // ── Transfer ask_price: buyer → seller ───────────────────────────────────
     token::transfer(
@@ -146,6 +180,38 @@ pub fn handler(ctx: Context<FillResaleListing>) -> Result<()> {
             .ok_or(OptionsError::MathOverflow)?;
         bp.premium_paid = bp.premium_paid.saturating_add(ask_price);
     }
+
+    // ── Transfer NFT (seller → buyer) via pre-approved vault delegate ────────
+    {
+        let authority_key = ctx.accounts.vault.authority;
+        let vault_bump = ctx.accounts.vault.bump;
+        let vault_seeds: &[&[u8]] = &[b"vault", authority_key.as_ref(), &[vault_bump]];
+        let signer_seeds = &[vault_seeds];
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from:      ctx.accounts.seller_nft_ata.to_account_info(),
+                    to:        ctx.accounts.buyer_nft_ata.to_account_info(),
+                    authority: ctx.accounts.vault.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            1,
+        )?;
+    }
+    // Re-approve vault as delegate over the buyer's new ATA (buyer signs this fill tx)
+    token::approve(
+        CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            token::Approve {
+                to:        ctx.accounts.buyer_nft_ata.to_account_info(),
+                delegate:  ctx.accounts.vault.to_account_info(),
+                authority: ctx.accounts.buyer.to_account_info(),
+            },
+        ),
+        1,
+    )?;
 
     // ── Close the listing (return rent to seller) ────────────────────────────
     ctx.accounts.listing.active = false;

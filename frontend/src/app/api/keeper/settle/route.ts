@@ -141,9 +141,23 @@ export async function GET(req: NextRequest) {
         // Non-fatal if oracle update fails; try settlement anyway
       }
 
-      // Now settle
-      const holder = a.owner as PublicKey;
-      const holderUsdc = await getAssociatedTokenAddress(USDP_MINT, holder);
+      // Find current NFT holder (may differ from position.owner after resale)
+      const [nftMint] = PublicKey.findProgramAddressSync(
+        [Buffer.from('option_nft'), posPk.toBuffer()], PROGRAM_ID,
+      );
+      let nftHolder: PublicKey = a.owner as PublicKey; // fallback
+      try {
+        const largest = await connection.getTokenLargestAccounts(nftMint);
+        const owner1 = largest.value.find(x => x.uiAmount === 1);
+        if (owner1) {
+          const info = await connection.getParsedAccountInfo(owner1.address);
+          const parsed: any = (info.value?.data as any)?.parsed;
+          if (parsed?.info?.owner) nftHolder = new PublicKey(parsed.info.owner);
+        }
+      } catch {}
+
+      const holderNftAta = await getAssociatedTokenAddress(nftMint, nftHolder);
+      const holderUsdc   = await getAssociatedTokenAddress(USDP_MINT, nftHolder);
 
       try {
         const sig = await program.methods
@@ -158,9 +172,12 @@ export async function GET(req: NextRequest) {
             vault,
             usdcVault,
             ivOracle: oracle,
-            holder,
+            holder: a.owner,           // original position owner (PDA seed)
             position: posPk,
+            nftHolder,                 // current NFT holder — receives payoff
             holderUsdc,
+            nftMint,
+            holderNftAta,
             keeper: keeper.publicKey,
             tokenProgram: TOKEN_PROGRAM_ID,
           } as any)
