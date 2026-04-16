@@ -10,7 +10,7 @@ const IDL = require('../target/idl/pacifica_options.json');
 const PROGRAM_ID = new PublicKey('CBkvR8SeN6j8RQKB7dSxG3dza2v71XHmWEe8LgfMW1hG');
 
 async function main() {
-  const keypairPath = path.resolve(os.homedir(), '.config/solana/vault_authority.json');
+  const keypairPath = path.resolve(os.homedir(), '.config/solana/usdp_authority.json');
   const authority = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(keypairPath, 'utf8'))));
   const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
   const provider = new AnchorProvider(connection, new anchor.Wallet(authority), { commitment: 'confirmed' });

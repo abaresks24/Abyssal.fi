@@ -173,7 +173,9 @@ pub fn handler(ctx: Context<FillResaleListing>) -> Result<()> {
             bp.settled       = false;
             bp.payoff_received = 0;
             bp.created_at    = now;
-            bp._padding      = [0u8; 32];
+            // Inherit seller's spot_at_buy for correct OI accounting on settle
+            bp.spot_at_buy   = ctx.accounts.seller_position.spot_at_buy;
+            bp._padding      = [0u8; 24];
         }
         bp.size = bp.size
             .checked_add(size)

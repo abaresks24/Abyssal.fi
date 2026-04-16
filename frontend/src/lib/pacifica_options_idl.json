@@ -5313,14 +5313,24 @@
             "type": "i64"
           },
           {
+            "name": "spot_at_buy",
+            "docs": [
+              "Spot at buy (scaled 1e6). Used at settle to decrement OI by the",
+              "SAME value buy_option added, eliminating drift. Older positions",
+              "have 0 (settle subtracts nothing, harmless).",
+              "Takes 8 bytes from the original 32-byte padding → no size change."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "_padding",
             "docs": [
-              "Reserved"
+              "Reserved (was 32 bytes, now 24 after spot_at_buy)."
             ],
             "type": {
               "array": [
                 "u8",
-                32
+                24
               ]
             }
           }

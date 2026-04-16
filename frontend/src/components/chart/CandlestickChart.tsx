@@ -6,11 +6,9 @@ import {
   CrosshairMode,
   LineStyle,
   CandlestickSeries,
-  HistogramSeries,
   type IChartApi,
   type ISeriesApi,
   type CandlestickSeriesPartialOptions,
-  type HistogramSeriesPartialOptions,
   type Time,
 } from 'lightweight-charts';
 import type { Candle } from '@/types';
@@ -27,7 +25,6 @@ export function CandlestickChart({ candles, currentPrice, selectedStrike, onLoad
   const containerRef   = useRef<HTMLDivElement>(null);
   const chartRef       = useRef<IChartApi | null>(null);
   const candleRef      = useRef<ISeriesApi<'Candlestick'> | null>(null);
-  const volumeRef      = useRef<ISeriesApi<'Histogram'> | null>(null);
   const strikeLineRef  = useRef<ReturnType<ISeriesApi<'Candlestick'>['createPriceLine']> | null>(null);
   const initialScrollRef = useRef(false);
 
@@ -91,18 +88,8 @@ export function CandlestickChart({ candles, currentPrice, selectedStrike, onLoad
       wickDownColor:   '#eb365a',
     } as CandlestickSeriesPartialOptions);
 
-    // Volume in the lower portion of the same chart — synchronized by default
-    const volumeSeries = chart.addSeries(HistogramSeries, {
-      priceFormat:  { type: 'volume' },
-      priceScaleId: 'vol',
-    } as HistogramSeriesPartialOptions);
-    volumeSeries.priceScale().applyOptions({
-      scaleMargins: { top: 0.78, bottom: 0 },
-    });
-
     chartRef.current  = chart;
     candleRef.current = candleSeries;
-    volumeRef.current = volumeSeries;
 
     if (onLoadMore) {
       chart.timeScale().subscribeVisibleLogicalRangeChange(range => {
@@ -114,7 +101,6 @@ export function CandlestickChart({ candles, currentPrice, selectedStrike, onLoad
       chart.remove();
       chartRef.current  = null;
       candleRef.current = null;
-      volumeRef.current = null;
       initialScrollRef.current = false;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -127,13 +113,6 @@ export function CandlestickChart({ candles, currentPrice, selectedStrike, onLoad
     candleRef.current.setData(candles.map(c => ({
       time: t(c), open: c.open, high: c.high, low: c.low, close: c.close,
     })));
-    if (volumeRef.current) {
-      volumeRef.current.setData(candles.map(c => ({
-        time:  t(c),
-        value: c.volume,
-        color: c.close >= c.open ? 'rgba(2,199,123,0.45)' : 'rgba(235,54,90,0.45)',
-      })));
-    }
     if (!initialScrollRef.current) {
       chartRef.current?.timeScale().scrollToRealTime();
       initialScrollRef.current = true;

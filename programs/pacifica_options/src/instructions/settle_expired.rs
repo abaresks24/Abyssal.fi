@@ -183,6 +183,7 @@ pub fn handler(ctx: Context<SettleExpired>, args: SettleExpiredArgs) -> Result<(
     let size = position.size;
     let strike = position.strike;
     let entry_delta = position.entry_delta;
+    let spot_at_buy = position.spot_at_buy;
     position.settled = true;
     position.size = 0;
     position.payoff_received = net_payoff;
@@ -190,10 +191,11 @@ pub fn handler(ctx: Context<SettleExpired>, args: SettleExpiredArgs) -> Result<(
     // ── Update vault state ───────────────────────────────────────────────────
     // Decrement OI by the SAME risk-weighted amount that was added in buy_option.
     // buy_option uses: risk_weighted = max_payoff × max(|delta|, 0.2)
-    // where max_payoff = spot×size (call) or strike×size (put)
+    // where max_payoff = spot_at_buy×size (call) or strike×size (put)
     let vault = &mut ctx.accounts.vault;
     let max_payoff_per_unit = match ctx.accounts.position.option_type {
-        OptionType::Call => ctx.accounts.iv_oracle.latest_price,
+        // spot_at_buy is 0 for legacy positions → OI decrement is 0, harmless
+        OptionType::Call => spot_at_buy,
         OptionType::Put  => strike,
     };
     let max_payoff = (max_payoff_per_unit as u128)

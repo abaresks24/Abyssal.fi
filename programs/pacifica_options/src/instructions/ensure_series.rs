@@ -113,7 +113,8 @@ pub fn handler(ctx: Context<EnsureSeries>, args: EnsureSeriesArgs) -> Result<()>
             position.settled          = false;
             position.payoff_received  = 0;
             position.created_at       = now;
-            position._padding         = [0u8; 32];
+            position.spot_at_buy      = 0;
+            position._padding         = [0u8; 24];
         }
     }
 

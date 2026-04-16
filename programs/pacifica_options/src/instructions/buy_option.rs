@@ -292,6 +292,7 @@ pub fn handler(ctx: Context<BuyOption>, args: BuyOptionArgs) -> Result<()> {
             position.entry_iv    = iv;
             position.entry_delta = delta;
             position.created_at  = now;
+            position.spot_at_buy = spot;
         }
         position.size = position.size
             .checked_add(args.size)

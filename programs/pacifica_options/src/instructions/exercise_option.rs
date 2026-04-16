@@ -171,24 +171,39 @@ pub fn handler(ctx: Context<ExerciseOption>, args: ExerciseOptionArgs) -> Result
         token::burn(burn_cpi, 1)?;
     }
 
+    // ── Snapshot values BEFORE zeroing position.size ────────────────────────
+    let size_snap        = ctx.accounts.position.size;
+    let entry_delta_snap = ctx.accounts.position.entry_delta;
+    let spot_at_buy_snap = ctx.accounts.position.spot_at_buy;
+    let strike_snap      = ctx.accounts.position.strike;
+    let opt_type_snap    = ctx.accounts.position.option_type;
+
     // ── Update position ──────────────────────────────────────────────────────
     let position = &mut ctx.accounts.position;
     position.settled = true;
     position.size = 0;
     position.payoff_received = net_payoff;
 
-    // ── Update vault state ───────────────────────────────────────────────────
+    // ── Update vault state (risk-weighted, matches buy_option's OI add) ─────
     let vault = &mut ctx.accounts.vault;
     vault.total_collateral = vault.total_collateral.saturating_sub(net_payoff);
-    let oi_notional = (position.strike as u128)
-        .saturating_mul(position.size as u128)
+
+    let max_payoff_per_unit = match opt_type_snap {
+        OptionType::Call => spot_at_buy_snap,   // 0 for legacy → safe no-op
+        OptionType::Put  => strike_snap,
+    };
+    let max_payoff = (max_payoff_per_unit as u128)
+        .saturating_mul(size_snap as u128)
         .checked_div(SCALE as u128)
-        .unwrap_or(0) as u64;
+        .unwrap_or(0);
+    let weight = (entry_delta_snap.unsigned_abs().max(200_000)).min(1_000_000) as u128;
+    let oi_notional = (max_payoff.saturating_mul(weight) / (SCALE as u128)) as u64;
     vault.open_interest = vault.open_interest.saturating_sub(oi_notional);
     vault.fees_collected = vault.fees_collected.saturating_add(fee);
+
     // Restore net delta: vault was short delta when it sold the option; on close, add it back
-    let delta_contribution = (position.entry_delta as i128)
-        .saturating_mul(position.size as i128)
+    let delta_contribution = (entry_delta_snap as i128)
+        .saturating_mul(size_snap as i128)
         .checked_div(SCALE as i128)
         .unwrap_or(0) as i64;
     vault.delta_net = vault.delta_net.saturating_add(delta_contribution);

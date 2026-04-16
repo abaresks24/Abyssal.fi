@@ -56,8 +56,14 @@ pub struct OptionPosition {
     /// Creation timestamp
     pub created_at: i64,
 
-    /// Reserved
-    pub _padding: [u8; 32],
+    /// Spot at buy (scaled 1e6). Used at settle to decrement OI by the
+    /// SAME value buy_option added, eliminating drift. Older positions
+    /// have 0 (settle subtracts nothing, harmless).
+    /// Takes 8 bytes from the original 32-byte padding → no size change.
+    pub spot_at_buy: u64,
+
+    /// Reserved (was 32 bytes, now 24 after spot_at_buy).
+    pub _padding: [u8; 24],
 }
 
 impl OptionPosition {
