@@ -19,7 +19,7 @@ import { Program, AnchorProvider, BN } from '@coral-xyz/anchor';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const bs58 = require('bs58');
 import IDL from '@/lib/pacifica_options_idl.json';
-import { placeMarketOrder, getPositions, getAccountInfo } from '@/lib/pacificaSign';
+import { placeMarketOrder, getPositions, getAccountInfo, updateLeverage } from '@/lib/pacificaSign';
 
 const SOLANA_RPC  = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
 const PROGRAM_ID  = new PublicKey('CBkvR8SeN6j8RQKB7dSxG3dza2v71XHmWEe8LgfMW1hG');
@@ -154,6 +154,14 @@ export async function GET(req: NextRequest) {
     // If switching side or reducing → use reduce-only
     const reduceOnly = currentSigned !== 0 && Math.sign(delta_diff) !== Math.sign(currentSigned);
 
+    // Ensure leverage is x1 on this market — delta hedge requires 1-to-1 sizing
+    // and any liquidation breaks the hedge. Idempotent / safe to call every tick.
+    const leverageResult = await updateLeverage(pacificaKp, {
+      symbol: MARKET,
+      leverage: 1,
+      mainAccount: pacificaAccount,
+    });
+
     const side: 'bid' | 'ask' = delta_diff > 0 ? 'bid' : 'ask';
     const result = await placeMarketOrder(pacificaKp, {
       symbol: MARKET,
@@ -170,6 +178,7 @@ export async function GET(req: NextRequest) {
       order_side: side,
       order_amount: orderAmount,
       reduce_only: reduceOnly,
+      leverage_set: leverageResult,
       result,
     });
   } catch (e: any) {

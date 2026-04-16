@@ -130,6 +130,30 @@ export async function getPositions(accountPubkey: string) {
   }>;
 }
 
+/**
+ * Update account leverage for a given symbol (1 = no leverage).
+ * Idempotent: safe to call repeatedly.
+ */
+export async function updateLeverage(
+  signer: Keypair,
+  params: { symbol: string; leverage: number; mainAccount?: string },
+): Promise<{ success: boolean; error?: string }> {
+  const body = signPacificaRequest(signer, 'update_leverage', {
+    symbol: params.symbol,
+    leverage: params.leverage,
+  }, { mainAccount: params.mainAccount });
+  const res = await fetch(`${PACIFICA_BASE}/account/leverage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    return { success: false, error: `${res.status}: ${text.slice(0, 200)}` };
+  }
+  return { success: true };
+}
+
 /** Get account info (balance, equity, available). */
 export async function getAccountInfo(accountPubkey: string) {
   const res = await fetch(`${PACIFICA_BASE}/account?account=${accountPubkey}`, {
