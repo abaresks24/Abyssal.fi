@@ -14,7 +14,12 @@
  */
 import nacl from 'tweetnacl';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const bs58 = require('bs58');
+const _bs58 = require('bs58');
+// bs58 v6 is ESM-only; require() may expose the API under .default.
+const bs58 = (typeof _bs58.encode === 'function' ? _bs58 : _bs58.default) as {
+  encode(b: Uint8Array): string;
+  decode(s: string): Uint8Array;
+};
 import { Keypair } from '@solana/web3.js';
 
 type OpType =
