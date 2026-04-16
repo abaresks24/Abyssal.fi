@@ -30,17 +30,31 @@ const SCALE       = 1_000_000;
 const HEDGE_BAND_PCT = 0.05; // 5%
 
 function loadPacificaKeypair(): Keypair {
-  const key = process.env.PACIFICA_API_KEY;
-  if (!key) throw new Error('PACIFICA_API_KEY env var not set');
-  // Try base58 private key first (Solana format), fall back to JSON array
+  const keyRaw = process.env.PACIFICA_API_KEY;
+  if (!keyRaw) throw new Error('PACIFICA_API_KEY env var not set');
+  // Strip whitespace and surrounding quotes that Vercel sometimes preserves
+  const key = keyRaw.trim().replace(/^['"]|['"]$/g, '');
+  // bs58 v6 is ESM — require() may return { default: {...} } on some builds
+  const decode: (s: string) => Uint8Array =
+    typeof bs58.decode === 'function'
+      ? bs58.decode
+      : bs58.default?.decode;
+  // 1. Try base58 (Solana/Phantom export format)
   try {
-    const bytes = bs58.decode(key);
+    const bytes = decode(key);
     if (bytes.length === 64) return Keypair.fromSecretKey(bytes);
-  } catch {}
-  try {
-    return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(key)));
-  } catch {}
-  throw new Error('PACIFICA_API_KEY must be base58 secret key or JSON array');
+    if (bytes.length === 32) throw new Error(`PACIFICA_API_KEY is a 32-byte base58 string (looks like a pubkey, not a secret key — you need the 88-char EXPORT from Phantom)`);
+    throw new Error(`PACIFICA_API_KEY base58 decoded to ${bytes.length} bytes, expected 64`);
+  } catch (e: any) {
+    // If decode itself failed, continue to JSON fallback
+    if (!/decoded to|pubkey, not a secret/.test(e?.message ?? '')) {
+      try {
+        return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(key)));
+      } catch {}
+      throw new Error(`PACIFICA_API_KEY could not be parsed as base58 or JSON array (length=${key.length})`);
+    }
+    throw e;
+  }
 }
 
 export async function GET(req: NextRequest) {
