@@ -7,7 +7,7 @@ import { PublicKey, Connection, Transaction } from '@solana/web3.js';
  * v2 faucet key — changing this resets all users so they get fauceted again.
  * Bump the version number to force a re-faucet for everyone.
  */
-const FAUCET_DONE_KEY = 'abyssal_faucet_v3';
+const FAUCET_DONE_KEY = 'abyssal_faucet_v4';
 
 /** Filler wallet — skip auto-faucet (would send tokens to itself). */
 const FILLER_ADDRESS = '58ZYLbE63N79tBrfSEUAyWY28muzAnV7MDjKt754tm4t';
