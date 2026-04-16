@@ -269,22 +269,30 @@ export class PacificaOptionsClient {
     console.log('[ensureSeries] ammPool PDA:', ammPool.toBase58());
     console.log('[ensureSeries] payer:', payer.toBase58());
 
-    return await this.program.methods
-      .ensureSeries({
-        marketDiscriminant: marketDisc,
-        optionType: optTypeDisc,
-        strike,
-        expiry,
-      })
-      .accounts({
-        vault,
-        ammPool,
-        position,
-        payer,
-        systemProgram: SystemProgram.programId,
-        rent: SYSVAR_RENT_PUBKEY,
-      } as any)
-      .rpc();
+    try {
+      return await this.program.methods
+        .ensureSeries({
+          marketDiscriminant: marketDisc,
+          optionType: optTypeDisc,
+          strike,
+          expiry,
+        })
+        .accounts({
+          vault,
+          ammPool,
+          position,
+          payer,
+          systemProgram: SystemProgram.programId,
+          rent: SYSVAR_RENT_PUBKEY,
+        } as any)
+        .rpc();
+    } catch (e: any) {
+      // Wallet-RPC duplicate-submit: the tx already landed, treat as success.
+      if (/already (been )?processed/i.test(e?.message ?? '')) {
+        return 'already-processed';
+      }
+      throw e;
+    }
   }
 
   // ── Buy Option ──────────────────────────────────────────────────────────────
@@ -376,7 +384,11 @@ export class PacificaOptionsClient {
       .add(buyIx, mintIx);
 
     const sig = await this.wallet.sendTransaction!(tx, this.connection);
-    await this.connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight });
+    try {
+      await this.connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight });
+    } catch (e: any) {
+      if (!/already (been )?processed/i.test(e?.message ?? '')) throw e;
+    }
     return sig;
   }
 
