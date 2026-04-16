@@ -79,7 +79,8 @@ export function Portfolio() {
   const history = positions.filter(p => p.status !== 'open');
   const shown   = filter === 'open' ? open : history;
 
-  const totalPremium = open.reduce((s, p) => s + p.premiumPaid, 0);
+  // Cumulative premium paid across all positions (open + settled)
+  const totalPremium = positions.reduce((s, p) => s + p.premiumPaid, 0);
   const realizedPnl  = history.reduce((s, p) => s + p.payoffReceived - p.premiumPaid, 0);
 
   return (
