@@ -1,17 +1,12 @@
 /**
- * Pacifica hedge keeper — banded delta hedging via agent wallet.
+ * Pacifica hedge keeper — multi-market banded delta hedging via agent wallet.
  *
- * Env vars (two modes):
+ * Aggregates delta per market from all open OptionPosition accounts on-chain,
+ * then rebalances each hedgeable symbol on Pacifica independently.
  *
- *   Agent wallet mode (preferred, more secure):
- *     PACIFICA_API_KEY       = Agent wallet private key (base58)
- *     PACIFICA_MAIN_ACCOUNT  = Main wallet pubkey (the account holding USDC)
- *
- *   Direct mode:
- *     PACIFICA_API_KEY       = Main wallet private key (base58)
- *     PACIFICA_MAIN_ACCOUNT  = (omitted — derived from signer)
- *
- * Triggered by Vercel Cron every 2 min.
+ * Env vars:
+ *   PACIFICA_API_KEY       = agent / main wallet private key (base58 or JSON)
+ *   PACIFICA_MAIN_ACCOUNT  = main wallet pubkey (optional — defaults to signer)
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
@@ -25,40 +20,50 @@ const SOLANA_RPC  = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devne
 const PROGRAM_ID  = new PublicKey('CBkvR8SeN6j8RQKB7dSxG3dza2v71XHmWEe8LgfMW1hG');
 const VAULT_AUTH  = new PublicKey('AHWUeGsXbx9gd46SBS5SQK4rfQ8rGb1wWAzvZtJ6zdRg');
 const SCALE       = 1_000_000;
+const HEDGE_BAND_PCT = 0.05; // 5% of collateral per market
 
-// Rebalance band: ignore deltas under this fraction of notional
-const HEDGE_BAND_PCT = 0.05; // 5%
+// Pacifica symbol ←→ Abyssal on-chain market-enum mapping.
+// Only include symbols actually perp-tradable on Pacifica.
+// (Equities, PLAT/NATGAS/COPPER have no Pacifica perp yet — options still trade
+// but aren't hedged. Once Pacifica lists them, just add here.)
+const HEDGEABLE: Record<string, string> = {
+  btc:  'BTC',
+  eth:  'ETH',
+  sol:  'SOL',
+  paxg: 'PAXG', // maps Abyssal XAU-equivalent to Pacifica's PAXG perp
+};
 
 function loadPacificaKeypair(): Keypair {
   const keyRaw = process.env.PACIFICA_API_KEY;
   if (!keyRaw) throw new Error('PACIFICA_API_KEY env var not set');
-  // Strip whitespace and surrounding quotes that Vercel sometimes preserves
   const key = keyRaw.trim().replace(/^['"]|['"]$/g, '');
-  // bs58 v6 is ESM — require() may return { default: {...} } on some builds
   const decode: (s: string) => Uint8Array =
-    typeof bs58.decode === 'function'
-      ? bs58.decode
-      : bs58.default?.decode;
-  // 1. Try base58 (Solana/Phantom export format)
+    typeof bs58.decode === 'function' ? bs58.decode : bs58.default?.decode;
   try {
     const bytes = decode(key);
     if (bytes.length === 64) return Keypair.fromSecretKey(bytes);
-    if (bytes.length === 32) throw new Error(`PACIFICA_API_KEY is a 32-byte base58 string (looks like a pubkey, not a secret key — you need the 88-char EXPORT from Phantom)`);
-    throw new Error(`PACIFICA_API_KEY base58 decoded to ${bytes.length} bytes, expected 64`);
+    if (bytes.length === 32) throw new Error('PACIFICA_API_KEY looks like a pubkey, not a secret key');
+    throw new Error(`PACIFICA_API_KEY decoded to ${bytes.length} bytes, expected 64`);
   } catch (e: any) {
-    // If decode itself failed, continue to JSON fallback
-    if (!/decoded to|pubkey, not a secret/.test(e?.message ?? '')) {
-      try {
-        return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(key)));
-      } catch {}
-      throw new Error(`PACIFICA_API_KEY could not be parsed as base58 or JSON array (length=${key.length})`);
+    if (!/decoded to|pubkey, not/.test(e?.message ?? '')) {
+      try { return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(key))); } catch {}
+      throw new Error(`PACIFICA_API_KEY could not be parsed (length=${key.length})`);
     }
     throw e;
   }
 }
 
+async function fetchMarkPrice(symbol: string): Promise<number> {
+  const base = process.env.PACIFICA_API_BASE_URL || 'https://api.pacifica.fi/api';
+  try {
+    const r = await fetch(`${base}/v1/kline/mark?symbol=${symbol}&interval=1m&start_time=${Date.now() - 120000}&end_time=${Date.now()}&limit=1`);
+    const j = await r.json();
+    const p = parseFloat(j.data?.[j.data.length - 1]?.c ?? '0');
+    return p > 0 ? p : 0;
+  } catch { return 0; }
+}
+
 export async function GET(req: NextRequest) {
-  // Vercel Cron auth
   const secret = req.nextUrl.searchParams.get('secret') ?? req.headers.get('authorization')?.replace('Bearer ', '');
   if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -66,120 +71,110 @@ export async function GET(req: NextRequest) {
 
   try {
     const pacificaKp = loadPacificaKeypair();
-    // Main account = wallet holding USDC on Pacifica (may differ from signer when using agent wallet)
     const pacificaAccount = process.env.PACIFICA_MAIN_ACCOUNT || pacificaKp.publicKey.toBase58();
 
-    // 1. Read vault state from on-chain
     const connection = new Connection(SOLANA_RPC, 'confirmed');
     const dummy = { publicKey: PublicKey.default, signTransaction: async (t: any) => t, signAllTransactions: async (t: any[]) => t };
     const provider = new AnchorProvider(connection, dummy as any, { commitment: 'confirmed' });
     const program = new Program(IDL as any, provider);
-    const [vault] = PublicKey.findProgramAddressSync(
-      [Buffer.from('vault'), VAULT_AUTH.toBuffer()], PROGRAM_ID,
-    );
+    const [vault] = PublicKey.findProgramAddressSync([Buffer.from('vault'), VAULT_AUTH.toBuffer()], PROGRAM_ID);
     const vaultState: any = await (program.account as any).optionVault.fetch(vault);
+    const vaultCollateral = (vaultState.totalCollateral as BN).toNumber() / SCALE;
 
-    // 2. Net delta from vault (signed, scaled 1e6)
-    // Positive = vault is net long delta → user sold puts → we need to SHORT on Pacifica
-    // Negative = vault is net short delta → user bought calls → we need to LONG on Pacifica
-    const vaultDeltaRaw = (vaultState.deltaNet as BN).toNumber();
-    const vaultDeltaUnits = vaultDeltaRaw / SCALE; // in BTC-equivalent units (approximation)
+    // ── Aggregate delta per market from open positions ─────────────────────
+    const allPositions = await (program.account as any).optionPosition.all();
+    const deltaPerMarket: Record<string, number> = {};
+    for (const { account } of allPositions) {
+      const a: any = account;
+      if (a.settled) continue;
+      const size = (a.size as BN).toNumber();
+      if (size === 0) continue;
+      const marketKey = Object.keys(a.market)[0]?.toLowerCase();
+      if (!marketKey) continue;
+      const entryDelta = (a.entryDelta as BN).toNumber();
+      const isCall = a.optionType?.call !== undefined || a.optionType?.Call !== undefined;
+      // User's delta = entryDelta × size (signed). Vault is opposite.
+      const userDelta = (entryDelta * size) / SCALE / SCALE;
+      const vaultDelta = -userDelta;
+      // For puts entryDelta is already negative, for calls positive — no flip needed.
+      deltaPerMarket[marketKey] = (deltaPerMarket[marketKey] ?? 0) + vaultDelta;
+      void isCall; // kept for potential future logic
+    }
 
-    // 3. Fetch current Pacifica positions + account
+    // ── Fetch Pacifica state ───────────────────────────────────────────────
     const [pacificaPositions, pacificaAccountInfo] = await Promise.all([
       getPositions(pacificaAccount),
       getAccountInfo(pacificaAccount),
     ]);
-
     const pacificaBalance = parseFloat(pacificaAccountInfo?.balance ?? '0');
     const pacificaAvailable = parseFloat(pacificaAccountInfo?.available_to_spend ?? '0');
 
-    // Abyssal currently only hedges BTC (single-market MVP)
-    const MARKET = 'BTC';
-    // Get mark price from our keeper cache (oracle)
-    let markPrice = 75000;
-    try {
-      const base = process.env.PACIFICA_API_BASE_URL || 'https://api.pacifica.fi/api';
-      const r = await fetch(`${base}/v1/kline/mark?symbol=${MARKET}&interval=1m&start_time=${Date.now() - 120000}&end_time=${Date.now()}&limit=1`);
-      const j = await r.json();
-      const p = parseFloat(j.data?.[j.data.length - 1]?.c ?? '0');
-      if (p > 0) markPrice = p;
-    } catch {}
+    // ── Per-market rebalance ───────────────────────────────────────────────
+    const perMarket: any[] = [];
+    const orders: any[] = [];
 
-    // 4. Compute hedge target
-    // Vault short delta of X BTC → we should be long X BTC on Pacifica
-    const targetHedgeAmount = -vaultDeltaUnits; // opposite of vault delta
-    const targetSide: 'bid' | 'ask' = targetHedgeAmount >= 0 ? 'bid' : 'ask';
-    const absTarget = Math.abs(targetHedgeAmount);
+    for (const [abyssalMarket, pacificaSymbol] of Object.entries(HEDGEABLE)) {
+      const vaultDeltaUnits = deltaPerMarket[abyssalMarket] ?? 0;
+      // Vault long delta → SHORT Pacifica. Vault short delta → LONG Pacifica.
+      const targetHedgeAmount = -vaultDeltaUnits;
+      const absTarget = Math.abs(targetHedgeAmount);
 
-    // Current Pacifica position
-    const btcPos = pacificaPositions.find(p => p.symbol === MARKET);
-    const currentAmount = btcPos ? parseFloat(btcPos.amount) : 0;
-    const currentSide = btcPos?.side ?? null;
-    const currentSigned = currentSide === 'bid' ? currentAmount : -currentAmount;
-    const targetSigned = targetSide === 'bid' ? absTarget : -absTarget;
-    const delta_diff = targetSigned - currentSigned;
+      const pos = pacificaPositions.find((p: any) => p.symbol === pacificaSymbol);
+      const currentAmount = pos ? parseFloat(pos.amount) : 0;
+      const currentSigned = pos?.side === 'bid' ? currentAmount : -currentAmount;
+      const targetSigned = targetHedgeAmount;
+      const delta_diff = targetSigned - currentSigned;
 
-    // 5. Apply band — only rebalance if delta diff > 5% of notional
-    const vaultCollateral = (vaultState.totalCollateral as BN).toNumber() / SCALE;
-    const notionalThreshold = vaultCollateral * HEDGE_BAND_PCT / markPrice; // in BTC units
-    const inBand = Math.abs(delta_diff) < notionalThreshold;
+      const markPrice = await fetchMarkPrice(pacificaSymbol);
+      const bandThreshold = markPrice > 0
+        ? (vaultCollateral * HEDGE_BAND_PCT) / markPrice / Object.keys(HEDGEABLE).length
+        : 0;
+      const inBand = Math.abs(delta_diff) < bandThreshold || Math.abs(delta_diff) * markPrice < 10;
 
-    const status: any = {
-      market: MARKET,
-      mark_price: markPrice,
-      vault_delta_units: vaultDeltaUnits,
-      vault_collateral: vaultCollateral,
-      target_hedge_amount: targetHedgeAmount,
-      current_pacifica_amount: currentSigned,
-      delta_diff,
-      band_threshold_btc: notionalThreshold,
-      in_band: inBand,
-      pacifica_balance: pacificaBalance,
-      pacifica_available: pacificaAvailable,
-      pacifica_account: pacificaAccount,
-    };
+      const marketStatus: any = {
+        symbol: pacificaSymbol,
+        mark_price: markPrice,
+        vault_delta_units: vaultDeltaUnits,
+        target_hedge_amount: targetHedgeAmount,
+        current_pacifica_amount: currentSigned,
+        delta_diff,
+        band_threshold: bandThreshold,
+        in_band: inBand,
+      };
 
-    if (inBand) {
-      return NextResponse.json({ ...status, action: 'none', reason: 'within band' });
+      if (inBand) {
+        perMarket.push({ ...marketStatus, action: 'none' });
+        continue;
+      }
+
+      const orderAmount = Math.abs(delta_diff);
+      const reduceOnly = currentSigned !== 0 && Math.sign(delta_diff) !== Math.sign(currentSigned);
+      const side: 'bid' | 'ask' = delta_diff > 0 ? 'bid' : 'ask';
+
+      try {
+        await updateLeverage(pacificaKp, { symbol: pacificaSymbol, leverage: 1, mainAccount: pacificaAccount });
+        const result = await placeMarketOrder(pacificaKp, {
+          symbol: pacificaSymbol,
+          side,
+          amount: orderAmount.toFixed(4),
+          slippagePercent: '5',
+          reduceOnly,
+          mainAccount: pacificaAccount,
+        });
+        orders.push({ symbol: pacificaSymbol, side, amount: orderAmount, result });
+        perMarket.push({ ...marketStatus, action: 'rebalance', order_side: side, order_amount: orderAmount, reduce_only: reduceOnly, result });
+      } catch (err: any) {
+        perMarket.push({ ...marketStatus, action: 'error', error: err?.message ?? 'unknown' });
+      }
     }
-
-    // 6. Place rebalance order (at least $10 notional, avoid dust)
-    const orderAmount = Math.abs(delta_diff);
-    if (orderAmount * markPrice < 10) {
-      return NextResponse.json({ ...status, action: 'none', reason: 'below dust threshold' });
-    }
-
-    // If increasing position in same direction → not reduce-only
-    // If switching side or reducing → use reduce-only
-    const reduceOnly = currentSigned !== 0 && Math.sign(delta_diff) !== Math.sign(currentSigned);
-
-    // Ensure leverage is x1 on this market — delta hedge requires 1-to-1 sizing
-    // and any liquidation breaks the hedge. Idempotent / safe to call every tick.
-    const leverageResult = await updateLeverage(pacificaKp, {
-      symbol: MARKET,
-      leverage: 1,
-      mainAccount: pacificaAccount,
-    });
-
-    const side: 'bid' | 'ask' = delta_diff > 0 ? 'bid' : 'ask';
-    const result = await placeMarketOrder(pacificaKp, {
-      symbol: MARKET,
-      side,
-      amount: orderAmount.toFixed(4),
-      slippagePercent: '5',
-      reduceOnly,
-      mainAccount: pacificaAccount,
-    });
 
     return NextResponse.json({
-      ...status,
-      action: 'rebalance',
-      order_side: side,
-      order_amount: orderAmount,
-      reduce_only: reduceOnly,
-      leverage_set: leverageResult,
-      result,
+      vault_collateral: vaultCollateral,
+      pacifica_account: pacificaAccount,
+      pacifica_balance: pacificaBalance,
+      pacifica_available: pacificaAvailable,
+      markets: perMarket,
+      orders_placed: orders.length,
     });
   } catch (e: any) {
     console.error('[hedge]', e);
