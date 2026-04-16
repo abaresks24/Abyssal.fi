@@ -14,6 +14,7 @@ import { ExpirySelector } from '@/components/chain/ExpirySelector';
 import { StrikeSelector } from './StrikeSelector';
 import { SizeInput } from './SizeInput';
 import { PremiumDisplay } from './PremiumDisplay';
+import { PayoffChart } from './PayoffChart';
 import { BuyButton } from './BuyButton';
 
 export function OptionBuilder() {
@@ -22,7 +23,7 @@ export function OptionBuilder() {
   const { price: spot } = usePacificaWS(market);
   const { iv } = useAFVR(market);
 
-  const { premium, totalPremium, fee } = useBlackScholes(
+  const { premium, totalPremium, fee, breakeven } = useBlackScholes(
     spot, strike, expiry, iv, side, size,
   );
 
@@ -130,6 +131,22 @@ export function OptionBuilder() {
 
       <SizeInput spot={spot} />
       <PremiumDisplay premium={premium} totalPremium={totalPremium} side={side} />
+
+      {strike > 0 && premium > 0 && (
+        <>
+          <PayoffChart strike={strike} premium={premium} size={size} side={side} currentSpot={spot} />
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '6px 10px', fontSize: 11,
+            background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 6,
+          }}>
+            <span style={{ color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Breakeven</span>
+            <span style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: 'var(--cyan)' }}>
+              ${breakeven.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+            </span>
+          </div>
+        </>
+      )}
 
       {/* Slippage — compact inline */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
