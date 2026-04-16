@@ -32,7 +32,7 @@ export const SideToggle = React.memo(function SideToggle() {
               boxShadow: active ? `inset 0 -2px 0 ${color}` : 'none',
             }}
           >
-            {isCall ? '↗ Call' : '↘ Put'}
+            {isCall ? 'Call' : 'Put'}
           </button>
         );
       })}
