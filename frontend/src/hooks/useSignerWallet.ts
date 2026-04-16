@@ -66,24 +66,19 @@ export function useSignerWallet() {
 
     // Phantom sometimes forwards the signed tx to its own RPC before ours.
     // Handle "already processed" by recovering the pre-computed signature.
+    // Use skipPreflight to avoid the "already processed" preflight false-positive
+    // that happens when Phantom submits the tx to its RPC before ours.
+    const onChainSig = await connection.sendRawTransaction(raw, {
+      skipPreflight: true,
+      preflightCommitment: 'confirmed',
+    });
     try {
-      const onChainSig = await connection.sendRawTransaction(raw, {
-        skipPreflight: false,
-        preflightCommitment: 'confirmed',
-      });
       await connection.confirmTransaction({ signature: onChainSig, blockhash, lastValidBlockHeight }, 'confirmed');
-      return onChainSig;
     } catch (e: any) {
-      if (/already (been )?processed/i.test(e?.message ?? '')) {
-        // Already submitted by the wallet's own RPC — look up actual signature
-        const actualSig = signed.signatures[0]?.signature;
-        if (actualSig) {
-          const bs58 = require('bs58');
-          return bs58.encode(actualSig);
-        }
-      }
-      throw e;
+      // already-processed at confirm time = the tx landed, success
+      if (!/already (been )?processed/i.test(e?.message ?? '')) throw e;
     }
+    return onChainSig;
   }, [publicKey, signTransaction]);
 
   const walletForClient = useMemo(() => ({

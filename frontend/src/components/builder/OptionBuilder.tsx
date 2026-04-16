@@ -125,6 +125,18 @@ export function OptionBuilder() {
 
       <ExpirySelector />
       <ActionToggle />
+      {action === 'sell' && (
+        <div style={{
+          fontSize: 11, color: 'var(--text3)', lineHeight: 1.5,
+          padding: '8px 10px',
+          background: 'rgba(236,202,90,0.06)',
+          border: '1px solid rgba(236,202,90,0.25)',
+          borderRadius: 6,
+        }}>
+          <strong style={{ color: 'var(--amber)' }}>Sell</strong> = close a position you already own on this exact series.
+          To short an option from scratch (earn premium, lock collateral), use the <strong>Marketplace → Write Listing</strong>.
+        </div>
+      )}
       <SideToggle />
 
       <div>
