@@ -13,12 +13,8 @@ import { SideToggle } from './SideToggle';
 import { ExpirySelector } from '@/components/chain/ExpirySelector';
 import { StrikeSelector } from './StrikeSelector';
 import { SizeInput } from './SizeInput';
-import { PayoffChart } from './PayoffChart';
 import { PremiumDisplay } from './PremiumDisplay';
-import { GreeksDisplay } from './GreeksDisplay';
-import { OrderSummary } from './OrderSummary';
 import { BuyButton } from './BuyButton';
-import { PositionsList } from './PositionsList';
 
 export function OptionBuilder() {
   const { publicKey, walletForClient, ready: signerReady } = useSignerWallet();
@@ -26,7 +22,7 @@ export function OptionBuilder() {
   const { price: spot } = usePacificaWS(market);
   const { iv } = useAFVR(market);
 
-  const { premium, greeks, totalPremium, fee, breakeven } = useBlackScholes(
+  const { premium, totalPremium, fee } = useBlackScholes(
     spot, strike, expiry, iv, side, size,
   );
 
@@ -109,7 +105,7 @@ export function OptionBuilder() {
   }, [publicKey, signerReady, walletForClient, market, side, action, strike, expiry, size, slippagePct]);
 
   return (
-    <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
 
       {/* Header */}
       <div style={{
@@ -132,12 +128,10 @@ export function OptionBuilder() {
         <StrikeSelector spot={spot} />
       </div>
 
-      <PremiumDisplay premium={premium} totalPremium={totalPremium} side={side} />
-      <PayoffChart strike={strike} premium={premium} size={size} side={side} currentSpot={spot} />
-      <GreeksDisplay greeks={greeks} />
       <SizeInput spot={spot} />
+      <PremiumDisplay premium={premium} totalPremium={totalPremium} side={side} />
 
-      {/* Slippage selector */}
+      {/* Slippage — compact inline */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span style={{ fontSize: 10, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Slippage</span>
         {[0.5, 1, 2, 5].map(pct => (
@@ -155,31 +149,7 @@ export function OptionBuilder() {
             {pct}%
           </button>
         ))}
-        <input
-          type="number"
-          min={0.1}
-          max={50}
-          step={0.1}
-          value={slippagePct}
-          onChange={e => {
-            const v = parseFloat(e.target.value);
-            if (!isNaN(v) && v > 0 && v <= 50) setSlippagePct(v);
-          }}
-          style={{
-            width: 44, padding: '2px 4px', borderRadius: 4, fontSize: 11,
-            border: '1px solid var(--border2)', background: 'var(--bg3)',
-            color: 'var(--text)', fontFamily: 'var(--mono)', textAlign: 'center',
-          }}
-        />
       </div>
-
-      {strike > 0 && premium > 0 && (
-        <OrderSummary
-          strike={strike} expiry={expiry} size={size} market={market}
-          totalPremium={totalPremium} fee={fee} breakeven={breakeven}
-          side={side} action={action} spot={spot}
-        />
-      )}
 
       <BuyButton
         side={side} action={action}
@@ -213,8 +183,6 @@ export function OptionBuilder() {
           {err}
         </div>
       )}
-
-      <PositionsList />
     </div>
   );
 }
