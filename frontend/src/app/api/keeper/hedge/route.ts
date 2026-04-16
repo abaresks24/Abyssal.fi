@@ -159,7 +159,7 @@ export async function GET(req: NextRequest) {
       symbol: MARKET,
       side,
       amount: orderAmount.toFixed(4),
-      slippagePercent: '2',
+      slippagePercent: '5',
       reduceOnly,
       mainAccount: pacificaAccount,
     });
